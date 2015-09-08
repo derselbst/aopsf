@@ -517,17 +517,17 @@ int32 psf2_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
 {
 	int i;
 
-    const int samples_per_frame = psx->psf_refresh == 50 ? 960 : 800;
+    const int samples_per_frame = 800;
 
     int samples_into_frame = psx->samples_into_frame;
+    
+    spu_set_buffer(SPUSTATE, buffer, samples);
     
     while (samples)
     {
         int samples_to_do = samples_per_frame - samples_into_frame;
         if (samples_to_do > samples)
             samples_to_do = samples;
-        
-        spu_set_buffer(SPUSTATE, buffer, samples_to_do);
         
         for (i = 0; i < samples_to_do; i++)
         {
@@ -539,11 +539,11 @@ int32 psf2_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
         if (samples_into_frame >= samples_per_frame)
             ps2_hw_frame(psx), samples_into_frame = 0;
         
-        spu_flush(SPUSTATE);
-        
         samples -= samples_to_do;
         if (buffer) buffer += samples_to_do * 2;
     }
+    
+    spu_flush(SPUSTATE);
     
     psx->samples_into_frame = samples_into_frame;
 

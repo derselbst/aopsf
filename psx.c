@@ -475,7 +475,7 @@ int mips_execute( MIPS_CPU_CONTEXT *mipscpu, int cycles )
 				break;
 			case FUNCT_BREAK:
 				printf("BREAK!\n");
-				exit(-1);
+//				exit(-1);
 //				mips_exception( EXC_BP );
 				mips_advance_pc(mipscpu);
 				break;
