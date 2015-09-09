@@ -90,6 +90,10 @@ int32 psf_start(PSX_STATE *psx)
 {
 	int i;
 	union cpuinfo mipsinfo;
+    
+#if DEBUG_DISASM
+    psx->mipscpu.file = fopen("/tmp/moo.txt", "w");
+#endif
 
 	// clear PSX work RAM before we start scribbling in it
 	// cleared by "first" call to psf_load_section
@@ -195,12 +199,18 @@ int32 psf_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
     }
     
     psx->samples_into_frame = samples_into_frame;
+    
+    if (psx->stop)
+        return AO_FAIL;
 
 	return AO_SUCCESS;
 }
 
 int32 psf_stop(PSX_STATE *psx)
 {
+#if DEBUG_DISASM
+    fclose(psx->mipscpu.file);
+#endif
 	return AO_SUCCESS;
 }
 

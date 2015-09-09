@@ -60,6 +60,8 @@
 #define DEBUG_UNK_RW	(0)		// debug unknown reads/writes
 #define DEBUG_THREADING (0)		// debug PS2 IOP threading
 
+#define DEBUG_DISASM    (0)     // debug all CPU activity to a log file
+
 typedef struct
 {
 	char name[10];
@@ -172,6 +174,10 @@ enum
 	BLK_BK = 12
 };
 
+#if DEBUG_DISASM
+#include <stdio.h>
+#endif
+
 struct mips_cpu_context
 {
 	UINT32 op;
@@ -191,6 +197,10 @@ struct mips_cpu_context
   int mips_ICount;
 
   PSX_STATE *psx;
+    
+#if DEBUG_DISASM
+  FILE *file;
+#endif
 };
 
 struct psx_state
@@ -203,6 +213,8 @@ struct psx_state
   uint32 initialPC, initialSP;
   uint32 initialGP; // PSF1 only
   uint32 loadAddr;
+    
+  uint32 stop; // stop running when this is set
 
   // SPU format
   uint8 *start_of_file, *song_ptr;

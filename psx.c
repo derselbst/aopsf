@@ -392,7 +392,7 @@ int mips_execute( MIPS_CPU_CONTEXT *mipscpu, int cycles )
 
 		mipscpu->op = cpu_readop32( mipscpu->pc );
 
-#if 0
+#if DEBUG_DISASM
         {
             char buffer[1024] = {0};
             if (mipscpu->op == FUNCT_HLECALL)

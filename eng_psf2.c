@@ -454,6 +454,10 @@ int32 psf2_start(PSX_STATE *psx)
 	uint32 irx_len;
 	uint8 *buf;
 	union cpuinfo mipsinfo;
+    
+#if DEBUG_DISASM
+    psx->mipscpu.file = fopen("/tmp/moo.txt", "w");
+#endif
 
 	psx->loadAddr = 0x23f00;	// this value makes allocations work out similarly to how they would
 				// in Highly Experimental (as per Shadow Hearts' hard-coded assumptions)
@@ -546,6 +550,9 @@ int32 psf2_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
     spu_flush(SPUSTATE);
     
     psx->samples_into_frame = samples_into_frame;
+    
+    if (psx->stop)
+        return AO_FAIL;
 
 	return AO_SUCCESS;
 }
@@ -561,6 +568,10 @@ int32 psf2_stop(PSX_STATE *psx)
 		psx->fssize[i] = 0;
 	}
 	psx->num_fs = 0;
+    
+#if DEBUG_DISASM
+    fclose(psx->mipscpu.file);
+#endif
 
 	return AO_SUCCESS;
 }

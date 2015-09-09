@@ -443,7 +443,7 @@ static void ps2_dma4(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 		#if DEBUG_HLE_IOP
 		printf("DMA4: RAM %08x to SPU2\n", madr);
 		#endif
-		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
+		bcr = (bcr>>16) * (bcr & 0xffff) * 8;
 		spu_dma(SPUSTATE, 0, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 1);
 	}
 	else
@@ -451,7 +451,7 @@ static void ps2_dma4(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 		#if DEBUG_HLE_IOP
 		printf("DMA4: SPU2 to RAM %08x\n", madr);
 		#endif
-		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
+		bcr = (bcr>>16) * (bcr & 0xffff) * 8;
 		spu_dma(SPUSTATE, 0, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 0);
 	}
 
@@ -465,7 +465,7 @@ static void ps2_dma7(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 		#if DEBUG_HLE_IOP
 		printf("DMA7: RAM %08x to SPU2\n", madr);
 		#endif
-		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
+		bcr = (bcr>>16) * (bcr & 0xffff) * 8;
 		spu_dma(SPUSTATE, 1, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 1);
 	}
 	else
@@ -473,7 +473,7 @@ static void ps2_dma7(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 		#if DEBUG_HLE_IOP
 		printf("DMA7: SPU2 to RAM %08x\n", madr);
 		#endif
-		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
+		bcr = (bcr>>16) * (bcr & 0xffff) * 8;
 //		SPU2readDMA7Mem(madr&0x1fffff, bcr);
 	}
 
@@ -1134,6 +1134,8 @@ void psx_hw_init(PSX_STATE *psx)
 	psx->entry_int = 0;
 
 	psx->WAI = 0;
+    
+    psx->stop = 0;
 
 	psx->root_cnts[0].mode = RC_EN;
 	psx->root_cnts[1].mode = RC_EN;
@@ -1158,6 +1160,10 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 		printf("IOP 'null' state\n");
 		#endif
 //		ao_song_done = 1;
+        psx->stop = 1;
+        // emergency, we may be stuck inside an interrupt handler
+        psx->softcall_target = 1;
+        mips_shorten_frame(&psx->mipscpu);
 		return;
 	}
 
