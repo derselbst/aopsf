@@ -220,10 +220,17 @@ static const int noisetable[] = {
 /*
 ** Static init
 */
+static uint32 spucore_initialized = 0;
+
 sint32 EMU_CALL spucore_init(void) {
   sint32 i;
+    
+  if (spucore_initialized) return 0;
 
-  memset(ratelogtable, 0, sizeof(ratelogtable));
+  /* Only zero out the actual zero portion of the table, 
+   * so we can safely call this concurrently. */
+
+  memset(ratelogtable, 0, sizeof(*ratelogtable) * (32-8));
   ratelogtable[32-8] = 1;
   ratelogtable[32-7] = 1;
   ratelogtable[32-6] = 1;
@@ -241,6 +248,8 @@ sint32 EMU_CALL spucore_init(void) {
     if(n > 0x20000000) n = 0x20000000;
     ratelogtable[32+i] = n;
   }
+    
+  spucore_initialized = 1;
 
   return 0;
 }
