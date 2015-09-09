@@ -1088,7 +1088,7 @@ void psx_hw_init(PSX_STATE *psx)
 	psx->timerexp = 0;
 
 	memset(psx->filestat, 0, sizeof(psx->filestat));
-	memset(psx->filedata, 0, sizeof(psx->filedata));
+	memset(psx->filename, 0, sizeof(psx->filename));
 
 	psx->dma4_cb = psx->dma7_cb = 0;
 
@@ -3201,20 +3201,25 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					#if DEBUG_HLE_IOP
 					printf("IOP: open(\"%s\") (PC=%08x)\n", mname, (uint32)mipsinfo.i);
 					#endif
+                    
+                    psx->filename[slot2use] = malloc(strlen(mname)+1);
+                    strcpy(psx->filename[slot2use], mname);
 
-					psx->filedata[slot2use] = malloc(6*1024*1024);
-					psx->filesize[slot2use] = psf2_load_file(psx, mname, psx->filedata[slot2use], 6*1024*1024);
 					psx->filepos[slot2use] = 0;
 					psx->filestat[slot2use] = 1;
+                    {
+                        uint8 tempbuf[4];
+                        psx->filesize[slot2use] = psx->readfile(psx->readfile_context, mname, 0, tempbuf, 0);
+                    }
 
-					if (psx->filesize[slot2use] == 0xffffffff)
-					{
-						mipsinfo.i = psx->filesize[slot2use];
-					}
-					else
-					{
-						mipsinfo.i = slot2use;
-					}
+                    if (psx->filesize[slot2use] >= 0x80000000)
+                    {
+                        mipsinfo.i = 0xffffffff;
+                    }
+                    else
+                    {
+                        mipsinfo.i = slot2use;
+                    }
 				}
 				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
@@ -3224,10 +3229,9 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
 				printf("IOP: close(%d) (PC=%08x)\n", a0, (uint32)mipsinfo.i);
 				#endif
-				free(psx->filedata[a0]);
-				psx->filedata[a0] = (uint8 *)NULL;
+				free(psx->filename[a0]);
+				psx->filename[a0] = (uint8 *)NULL;
 				psx->filepos[a0] = 0;
-				psx->filesize[a0] = 0;
 				psx->filestat[a0] = 0;
 				break;
 
@@ -3235,28 +3239,22 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				#if DEBUG_HLE_IOP
 				printf("IOP: read(%x %x %d) [pos %d size %d]\n", a0, a1, a2, psx->filepos[a0], psx->filesize[a0]);
 				#endif
+                
+                if (psx->filepos[a0] + a2 > psx->filesize[a0])
+                    a2 = psx->filesize[a0] - psx->filepos[a0];
+                
+                uint8 *rp = (uint8 *)psx->psx_ram;
+                rp += (a1 & 0x1fffff);
+                
+                a2 = psx->readfile(psx->readfile_context, psx->filename[a0], psx->filepos[a0], rp, a2);
+                
+                if (a2 > 0)
+                    psx->filepos[a0] += a2;
+                else
+                    a2 = 0;
 
-				if (psx->filepos[a0] >= psx->filesize[a0])
-				{
-					mipsinfo.i = 0;
-				}
-				else
-				{
-					uint8 *rp;
-
-					if ((psx->filepos[a0] + a2) > psx->filesize[a0])
-					{
-						a2 = psx->filesize[a0] - psx->filepos[a0];
-					}
-
-					rp = (uint8 *)psx->psx_ram;
-					rp += (a1 & 0x1fffff);
-					memcpy(rp, &psx->filedata[a0][psx->filepos[a0]], a2);
-
-					psx->filepos[a0] += a2;
-					mipsinfo.i = a2;
-				}
-				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
+                mipsinfo.i = a2;
+                mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			case 8:	// lseek

@@ -232,14 +232,13 @@ struct psx_state
   uint32 dma4_cb, dma7_cb, dma4_fval, dma4_flag, dma7_fval, dma7_flag;
   uint32 irq9_cb, irq9_fval, irq9_flag;
   uint32 irq_masked;
-
-  uint8 *filesys[MAX_FS];
-  uint32 fssize[MAX_FS];
-  int num_fs;
+    
+  virtual_readfile readfile;
+  void *readfile_context;
 
   volatile int softcall_target;
   int filestat[MAX_FILE_SLOTS];
-  uint8 *filedata[MAX_FILE_SLOTS];
+  char *filename[MAX_FILE_SLOTS];
   uint32 filesize[MAX_FILE_SLOTS], filepos[MAX_FILE_SLOTS];
   int intr_susp;
 

@@ -50,8 +50,10 @@ extern int32  psf_start(PSX_STATE *psx);
 extern int32  psf_gen(PSX_STATE *psx, int16 *buffer, uint32 samples);
 extern int32  psf_stop(PSX_STATE *psx);
 extern int32  psf_command(PSX_STATE *psx, int32 command, int32 parameter);
-
-extern uint32 psf2_load_section(PSX_STATE *psx, const uint8 *buffer, uint32 length);
+    
+typedef int (* virtual_readfile)(void *context, const char *path, int offset, char *buffer, int length);
+    
+extern void   psf2_register_readfile(PSX_STATE *psx, virtual_readfile function, void *context);
 extern int32  psf2_start(PSX_STATE *psx);
 extern int32  psf2_gen(PSX_STATE *psx, int16 *buffer, uint32 samples);
 extern int32  psf2_stop(PSX_STATE *state);

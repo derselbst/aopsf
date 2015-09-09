@@ -340,11 +340,6 @@ static uint32 load_file_ex(PSX_STATE *psx, const uint8 *top, const uint8 *start,
 	return 0xffffffff;
 }
 
-static uint32 load_file(PSX_STATE *psx, int fs, const char *file, uint8 *buf, uint32 buflen)
-{
-	return load_file_ex(psx, psx->filesys[fs], psx->filesys[fs], psx->fssize[fs], file, buf, buflen);
-}
-
 #if 0
 static dump_files(int fs, uint8 *buf, uint32 buflen)
 {
@@ -421,32 +416,11 @@ static dump_files(int fs, uint8 *buf, uint32 buflen)
 // find a file on our filesystems
 uint32 psf2_load_file(PSX_STATE *psx, const char *file, uint8 *buf, uint32 buflen)
 {
-	int i;
-	uint32 flen;
-
-	for (i = 0; i < psx->num_fs; i++)
-	{
-		flen = load_file(psx, i, file, buf, buflen);
-		if (flen != 0xffffffff)
-		{
-			return flen;
-		}
-	}
-
-	return 0xffffffff;
-}
-
-uint32 psf2_load_section(PSX_STATE *psx, const uint8 *buffer, uint32 length)
-{
-	if (psx->num_fs < MAX_FS)
-	{
-		psx->fssize[psx->num_fs] = length;
-		psx->filesys[psx->num_fs] = malloc(length);
-		memcpy(psx->filesys[psx->num_fs], buffer, length);
-		psx->num_fs++;
-		return 0;
-	}
-	return 0xffffffff;
+    int i = psx->readfile(psx->readfile_context, file, 0, (char *) buf, buflen);
+    if (i < 0)
+        return 0xffffffff;
+    else
+        return i;
 }
 
 int32 psf2_start(PSX_STATE *psx)
@@ -561,13 +535,15 @@ int32 psf2_stop(PSX_STATE *psx)
 {
 	int i;
 
-	for (i = 0; i < psx->num_fs; i++)
-	{
-		free(psx->filesys[i]);
-		psx->filesys[i] = NULL;
-		psx->fssize[i] = 0;
-	}
-	psx->num_fs = 0;
+    for (i = 0; i < MAX_FILE_SLOTS; i++)
+    {
+        if (psx->filestat[i])
+        {
+            free(psx->filename[i]);
+            psx->filename[i] = 0;
+            psx->filestat[i] = 0;
+        }
+    }
     
 #if DEBUG_DISASM
     fclose(psx->mipscpu.file);
@@ -625,4 +601,10 @@ uint32 psf2_get_loadaddr(PSX_STATE *psx)
 void psf2_set_loadaddr(PSX_STATE *psx, uint32 new)
 {
 	psx->loadAddr = new;
+}
+
+void  psf2_register_readfile(PSX_STATE *psx, virtual_readfile function, void *context)
+{
+    psx->readfile = function;
+    psx->readfile_context = context;
 }
