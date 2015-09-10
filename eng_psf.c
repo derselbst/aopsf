@@ -35,6 +35,10 @@
 
 #include "spu/spu.h"
 
+#ifdef _MSC_VER
+#define strncasecmp _strnicmp
+#endif
+
 static uint32 get_le32(const uint8 *start)
 {
 	return start[0] | start[1]<<8 | start[2]<<16 | start[3]<<24;

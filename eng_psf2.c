@@ -45,7 +45,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <zlib.h>
 
 #include "ao.h"
 #include "cpuintrf.h"
@@ -259,85 +258,6 @@ uint32 psf2_load_elf(PSX_STATE *psx, const uint8 *start, uint32 len)
 	printf("psf2_load_elf: entry PC %08x\n", entry);
 	#endif
 	return entry;
-}
-
-static uint32 load_file_ex(PSX_STATE *psx, const uint8 *top, const uint8 *start, uint32 len, const char *file, uint8 *buf, uint32 buflen)
-{
-	int32 numfiles, i, j;
-	const uint8 *cptr;
-	uint32 offs, uncomp, bsize, cofs, uofs;
-	uint32 X;
-	uLongf dlength;
-	int uerr;
-	char matchname[512];
-	const char *remainder;
-
-	// strip out to only the directory name
-	i = 0;
-	while ((file[i] != '/') && (file[i] != '\\') && (file[i] != '\0'))
-	{
-		matchname[i] = file[i];
-		i++;
-	}
-	matchname[i] = '\0';
-	remainder = &file[i+1];
-
-	cptr = start + 4;
-
-	numfiles = get_le32(start);
-
-	for (i = 0; i < numfiles; i++)
-	{
-		offs = get_le32(cptr + 36);
-		uncomp = get_le32(cptr + 40);
-		bsize = get_le32(cptr + 44);
-
-		#if DEBUG_LOADER
-		printf("[%s vs %s]: ofs %08x uncomp %08x bsize %08x\n", cptr, matchname, offs, uncomp, bsize);
-		#endif
-
-		if (!strcasecmp((char *)cptr, matchname))
-		{
-			if ((uncomp == 0) && (bsize == 0))
-			{
-				#if DEBUG_LOADER
-				printf("Drilling into subdirectory [%s] with [%s] at offset %x\n", matchname, remainder, offs);
-				#endif
-				return load_file_ex(psx, top, &top[offs], len-offs, remainder, buf, buflen);
-			}
-
-			X = (uncomp + bsize - 1) / bsize;
-
-			cofs = offs + (X*4);
-			uofs = 0;
-			for (j = 0; j < X; j++)
-			{
-				uint32 usize;
-
-				usize = get_le32(top + offs + (j*4));
-
-				dlength = buflen - uofs;
-
-				uerr = uncompress(&buf[uofs], &dlength, &top[cofs], usize);
-				if (uerr != Z_OK)
-				{
-					printf("Decompress fail: %lx %d!\n", dlength, uerr);
-					return 0xffffffff;
-				}
-
-				cofs += usize;
-				uofs += dlength;
-			}
-
-			return uncomp;
-		}
-		else
-		{
-			cptr += 48;
-		}
-	}
-
-	return 0xffffffff;
 }
 
 #if 0
