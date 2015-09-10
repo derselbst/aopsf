@@ -226,7 +226,7 @@ struct psx_state
 
   MIPS_CPU_CONTEXT mipscpu;
 
-  uint32 spu_delay, dma_icr, irq_data, irq_mask, dma_timer, WAI;
+  uint32 spu_delay, dma_pcr, dma_icr, irq_data, irq_mask, dma_timer, WAI;
   uint32 dma4_madr, dma4_bcr, dma4_chcr, dma4_delay;
   uint32 dma7_madr, dma7_bcr, dma7_chcr, dma7_delay;
   uint32 dma4_cb, dma7_cb, dma4_fval, dma4_flag, dma7_fval, dma7_flag;

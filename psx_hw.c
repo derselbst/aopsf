@@ -378,7 +378,11 @@ uint32 psx_hw_read(PSX_STATE *psx, offs_t offset, uint32 mem_mask)
 		return 0;
 	}
 
-	if (offset == 0x1f8010f4)
+    if (offset == 0x1f8010f0)
+    {
+        return psx->dma_pcr;
+    }
+	else if (offset == 0x1f8010f4)
 	{
 		return psx->dma_icr;
 	}
@@ -420,64 +424,93 @@ uint32 psx_hw_read(PSX_STATE *psx, offs_t offset, uint32 mem_mask)
 	return 0;
 }
 
+#define DMA_SPU_CYCLES_PER_HALFWORD (8)
+
 static void psx_dma4(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 {
+    int delay = 0;
 	if (chcr == 0x01000201)	// cpu to SPU
 	{
 //		printf("DMA4: RAM %08x to SPU\n", madr);
 		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
 		spu_dma(SPUSTATE, 0, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 1);
+        delay = (bcr / 2) * DMA_SPU_CYCLES_PER_HALFWORD;
 	}
 	else
 	{
 //		printf("DMA4: SPU to RAM %08x\n", madr);
 		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
 		spu_dma(SPUSTATE, 0, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 0);
+        delay = (bcr / 2) * DMA_SPU_CYCLES_PER_HALFWORD;
 	}
+    
+    delay /= 768;
+    if (!delay)
+        delay = 1;
+    
+    psx->dma_timer = delay;
+    psx->dma4_delay = delay;
 }
 
 static void ps2_dma4(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 {
+    int delay = 0;
+    
 	if (chcr == 0x01000201)	// cpu to SPU2
 	{
 		#if DEBUG_HLE_IOP
 		printf("DMA4: RAM %08x to SPU2\n", madr);
 		#endif
-		bcr = (bcr>>16) * (bcr & 0xffff) * 8;
+		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
 		spu_dma(SPUSTATE, 0, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 1);
+        delay = (bcr / 2) * DMA_SPU_CYCLES_PER_HALFWORD;
 	}
 	else
 	{
 		#if DEBUG_HLE_IOP
 		printf("DMA4: SPU2 to RAM %08x\n", madr);
 		#endif
-		bcr = (bcr>>16) * (bcr & 0xffff) * 8;
+		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
 		spu_dma(SPUSTATE, 0, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 0);
+        delay = (bcr / 2) * DMA_SPU_CYCLES_PER_HALFWORD;
 	}
 
-	psx->dma4_delay = 80;
+    delay /= 768;
+    if (!delay)
+        delay = 1;
+    
+    psx->dma_timer = delay;
+    psx->dma4_delay = delay;
 }
 
 static void ps2_dma7(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 {
+    int delay = 0;
+    
 	if ((chcr == 0x01000201) || (chcr == 0x00100010) || (chcr == 0x000f0010) || (chcr == 0x00010010))	// cpu to SPU2
 	{
 		#if DEBUG_HLE_IOP
 		printf("DMA7: RAM %08x to SPU2\n", madr);
 		#endif
-		bcr = (bcr>>16) * (bcr & 0xffff) * 8;
+		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
 		spu_dma(SPUSTATE, 1, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 1);
+        delay = (bcr / 2) * DMA_SPU_CYCLES_PER_HALFWORD;
 	}
 	else
 	{
 		#if DEBUG_HLE_IOP
 		printf("DMA7: SPU2 to RAM %08x\n", madr);
 		#endif
-		bcr = (bcr>>16) * (bcr & 0xffff) * 8;
+		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
 //		SPU2readDMA7Mem(madr&0x1fffff, bcr);
+        delay = (bcr / 2) * DMA_SPU_CYCLES_PER_HALFWORD;
 	}
 
-	psx->dma7_delay = 80;
+    delay /= 768;
+    if (!delay)
+        delay = 1;
+    
+	psx->dma7_delay = delay;
 }
 
 void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
@@ -579,9 +612,10 @@ void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
 		psx->dma4_madr = data;
 		return;
 	}
-	else if (offset == 0x1f8010c4)
+	else if (offset == 0x1f8010c4 || offset == 0x1f8010c6)
 	{
-		psx->dma4_bcr = data;
+        psx->dma4_bcr &= mem_mask;
+        psx->dma4_bcr |= data;
 		return;
 	}
 	else if (offset == 0x1f8010c8)
@@ -589,12 +623,14 @@ void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
 		psx->dma4_chcr = data;
 		psx_dma4(psx, psx->dma4_madr, psx->dma4_bcr, psx->dma4_chcr);
 
-		if (psx->dma_icr & (1 << (16+4)))
-		{
-			psx->dma_timer = 3;
-		}
 		return;
 	}
+    else if (offset == 0x1f8010f0)
+    {
+        psx->dma_pcr = ( psx->dma_pcr & mem_mask ) | ( data & ~mem_mask );
+        
+        return;
+    }
 	else if (offset == 0x1f8010f4)
 	{
 		psx->dma_icr = ( psx->dma_icr & mem_mask ) |
@@ -640,10 +676,6 @@ void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
 		psx->dma4_chcr = data;
 		ps2_dma4(psx, psx->dma4_madr, psx->dma4_bcr, psx->dma4_chcr);
 
-		if (psx->dma_icr & (1 << (16+4)))
-		{
-			psx->dma_timer = 3;
-		}
 		return;
 	}
 
@@ -660,14 +692,14 @@ void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
 		psx->dma7_madr = data;
 		return;
 	}
-	else if (offset == 0xbf801504)
+	else if (offset == 0xbf801508)
 	{
 		psx->dma7_chcr = data;
 		ps2_dma7(psx, psx->dma7_madr, psx->dma7_bcr, psx->dma7_chcr);
 		return;
 	}
 
-	if (offset == 0xbf801508 || offset == 0xbf80150a)
+	if (offset == 0xbf801504 || offset == 0xbf801506)
 	{
 		psx->dma7_bcr &= mem_mask;
 		psx->dma7_bcr |= data;
@@ -695,7 +727,7 @@ void psx_hw_slice(PSX_STATE *psx)
 	if (psx->dma_timer)
 	{
 		psx->dma_timer--;
-		if (psx->dma_timer == 0)
+		if ((psx->dma_timer == 0) && (psx->dma_icr & (1 << (16+4))))
 		{
             spu_interrupt_dma4(SPUSTATE);
 			psx->dma_icr |= (1 << (24+4));
@@ -1122,6 +1154,7 @@ void psx_hw_init(PSX_STATE *psx)
 	psx->Event = (EvtCtrlBlk *)&psx->psx_ram[0x1000/4];
 	psx->CounterEvent = (psx->Event + (32*2));
 
+    psx->dma_pcr = 0;
 	psx->dma_icr = 0;
 	psx->spu_delay = 0;
 	psx->irq_data = 0;
