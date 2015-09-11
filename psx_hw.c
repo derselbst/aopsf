@@ -1396,7 +1396,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 						// split free block
 						fd = chunk + 16 + a0;	// free block starts after block record and allocation size
 						psx->psx_ram[(fd+BLK_STAT)/4] = psx->psx_ram[(chunk+BLK_STAT)/4];
-						psx->psx_ram[(fd+BLK_SIZE)/4] = LE32(LE32(psx->psx_ram[(chunk+BLK_SIZE)/4]) - a0);
+						psx->psx_ram[(fd+BLK_SIZE)/4] = LE32(LE32(psx->psx_ram[(chunk+BLK_SIZE)/4]) - a0 - 16);
 						psx->psx_ram[(fd+BLK_FD)/4] = psx->psx_ram[(chunk+BLK_FD)/4];
 						psx->psx_ram[(fd+BLK_BK)/4] = chunk;
 
@@ -1409,6 +1409,49 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 						#if DEBUG_HLE_BIOS
 						printf("== %08x\n", mipsinfo.i);
 						#endif
+						mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
+					}
+					break;
+                    
+				case 0x34:  // free
+					{
+						uint32 chunk, size, fd, lastfd;
+
+						#if DEBUG_HLE_BIOS
+						printf("HLEBIOS: free(%08x)\n", a0);
+						#endif
+
+						chunk = (a0 & 0x1fffff) - 16;
+                        
+						if ((LE32(psx->psx_ram[(chunk+BLK_STAT)/4])) != 1)
+						{
+							// freeing already free block
+							mipsinfo.i = 0xffffffff;
+							mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
+							break;
+						}
+
+
+						size = LE32(psx->psx_ram[(chunk+BLK_SIZE)/4]);
+						fd = LE32(psx->psx_ram[(chunk+BLK_FD)/4]);
+						lastfd = 0;
+
+						// Search for and connect contiguous blocks
+						while (fd && LE32(psx->psx_ram[(fd+BLK_STAT)/4]) != 1)
+						{
+							size += LE32(psx->psx_ram[(fd+BLK_SIZE)/4]) + 16; // include header
+							lastfd = fd;
+							fd = LE32(psx->psx_ram[(fd+BLK_FD)]);
+						}
+
+						psx->psx_ram[(chunk+BLK_SIZE)/4] = LE32(size);
+						psx->psx_ram[(chunk+BLK_FD)/4] = LE32(lastfd);
+						psx->psx_ram[(chunk+BLK_STAT)/4] = LE32(0);
+
+						if (lastfd)
+							psx->psx_ram[(lastfd+BLK_BK)/4] = chunk;
+
+						mipsinfo.i = 0;
 						mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 					}
 					break;
