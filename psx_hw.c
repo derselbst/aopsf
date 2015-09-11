@@ -764,23 +764,7 @@ void ps2_hw_slice(PSX_STATE *psx)
 
 void psx_hw_frame(PSX_STATE *psx)
 {
-	if (psx->psf_refresh == 50)
-	{
-		psx->fcnt++;;
-
-		if (psx->fcnt < 6)
-		{
-			psx_irq_set(psx, 1);
-		}
-		else
-		{
-			psx->fcnt = 0;
-		}
-	}
-	else	// NTSC
-	{
-		psx_irq_set(psx, 1);
-	}
+	psx_irq_set(psx, 1);
 }
 
 void ps2_hw_frame(PSX_STATE *psx)
