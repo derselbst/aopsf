@@ -1378,30 +1378,37 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x33:	// malloc
 					{
-						uint32 chunk, fd;
+						uint32 chunk, fd, size;
+
+						size = a0;
+						if (size & 15)
+						{
+							size &= ~15;
+							size += 16;
+						}
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: malloc(%x)\n", a0);
+						printf("HLEBIOS: malloc(%x) -- rounding up to %x\n", a0, size);
 						#endif
 
 						chunk = psx->heap_addr;
 
 						// find a free block that's big enough
-						while ((a0 > LE32(psx->psx_ram[(chunk+BLK_SIZE)/4])) ||
+						while ((size > LE32(psx->psx_ram[(chunk+BLK_SIZE)/4])) ||
 						       (LE32(psx->psx_ram[(chunk+BLK_STAT)/4]) ==  1))
 						{
 							chunk = LE32(psx->psx_ram[(chunk+BLK_FD)]);
 						}
 
 						// split free block
-						fd = chunk + 16 + a0;	// free block starts after block record and allocation size
+						fd = chunk + 16 + size;	// free block starts after block record and allocation size
 						psx->psx_ram[(fd+BLK_STAT)/4] = psx->psx_ram[(chunk+BLK_STAT)/4];
-						psx->psx_ram[(fd+BLK_SIZE)/4] = LE32(LE32(psx->psx_ram[(chunk+BLK_SIZE)/4]) - a0 - 16);
+						psx->psx_ram[(fd+BLK_SIZE)/4] = LE32(LE32(psx->psx_ram[(chunk+BLK_SIZE)/4]) - size - 16);
 						psx->psx_ram[(fd+BLK_FD)/4] = psx->psx_ram[(chunk+BLK_FD)/4];
 						psx->psx_ram[(fd+BLK_BK)/4] = chunk;
 
 						psx->psx_ram[(chunk+BLK_STAT)/4] = LE32(1);
-						psx->psx_ram[(chunk+BLK_SIZE)/4] = LE32(a0);
+						psx->psx_ram[(chunk+BLK_SIZE)/4] = LE32(size);
 						psx->psx_ram[(chunk+BLK_FD)/4] = LE32(fd);
 
 						mipsinfo.i = chunk + 16;
@@ -1461,6 +1468,10 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 					#if DEBUG_HLE_BIOS
 					printf("HLEBIOS: InitHeap(%08x, %08x)\n", a0, a1);
 					#endif
+
+					// subtract initial block header
+					if (a1 >= 16)
+						a1 -= 16;
 
 					psx->heap_addr = a0 & 0x3fffffff;
 
