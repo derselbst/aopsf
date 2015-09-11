@@ -1469,9 +1469,23 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 					printf("HLEBIOS: InitHeap(%08x, %08x)\n", a0, a1);
 					#endif
 
+					// align block, subtracting overflow from requested size
+					if (a0 & 15)
+					{
+						a1 -= 16 - (a0 & 15);
+						a0 &= ~15;
+						a0 += 16;
+					}
+
 					// subtract initial block header
 					if (a1 >= 16)
 						a1 -= 16;
+
+					// align size down
+					if (a1 & 15)
+					{
+						a1 &= ~15;
+					}
 
 					psx->heap_addr = a0 & 0x3fffffff;
 
