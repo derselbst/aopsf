@@ -732,38 +732,15 @@ void psx_hw_slice(PSX_STATE *psx)
 		psx->dma_timer--;
 		if (psx->dma_timer == 0)
         {
-            if (psx->Event[9][5].status == LE32(EvStACTIVE))
-            {
-                psx->Event[9][5].status = LE32(EvStALREADY);
-                if (psx->Event[9][5].mode == LE32(EvMdINTR))
-                {
-                    // run the handler
-                    mipsinfo.i = LE32(psx->Event[9][5].fhandler);
-                    //	       				printf("Cause = %x, ePC = %x\n", mips_get_cause(), mips_get_ePC());
-                    //	       				printf("VBL running handler @ %x\n", mipsinfo.i);
-                    mips_set_info(&psx->mipscpu, CPUINFO_INT_PC, &mipsinfo);
-                    mipsinfo.i = 0x80001000;
-                    mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-                    
-                    // make sure we're set
-                    psx->psx_ram[0x1000/4] = LE32(FUNCT_HLECALL);
-                    
-                    psx->softcall_target = 0;
-                    oldICount = mips_get_icount(&psx->mipscpu);
-                    while (!psx->softcall_target)
-                    {
-                        mips_execute(&psx->mipscpu, 10);
-                    }
-                    mips_set_icount(&psx->mipscpu, oldICount);
-                    
-                    //	       				printf("Exiting softcall handler\n");
-                }
-            }
-            else if (psx->dma_icr & (1 << (16+4)))
+            if (psx->dma_icr & (1 << (16+4)))
             {
                 spu_interrupt_dma4(SPUSTATE);
                 psx->dma_icr |= (1 << (24+4));
                 psx_irq_set(psx, 0x0008);
+            }
+            else if (psx->Event[9][5].status == LE32(EvStACTIVE))
+            {
+                psx->Event[9][5].status = LE32(EvStALREADY);
             }
         }
 	}
