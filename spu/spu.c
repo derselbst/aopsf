@@ -839,11 +839,9 @@ uint32 EMU_CALL spu_cycles_until_interrupt(void *state, uint32 samples) {
 ////////////////////////////////////////////////////////////////////////////////
 
 void EMU_CALL spu_interrupt_dma4(void *state) {
-  if(SPUSTATE->version == 2) {
-    SPUSTATE->dma_mode[0] = 0;
-    // set core 0 reg 0x1B0 to 0, but we don't implement that
-    SPUSTATE->mystery_dma[0] |= 0x80;
-  }
+  SPUSTATE->dma_mode[0] = 0;
+  // set core 0 reg 0x1B0 to 0, but we don't implement that
+  SPUSTATE->mystery_dma[0] |= 0x80;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

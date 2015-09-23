@@ -1554,7 +1554,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 							#if DEBUG_HLE_BIOS
 							printf("event not active\n");
 							#endif
-							return;
+							break;
 						}
 
 						// if interrupt mode, do the call
