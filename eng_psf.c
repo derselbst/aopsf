@@ -46,7 +46,7 @@ static uint32 get_le32(const uint8 *start)
 
 uint32 psf_load_section(PSX_STATE *psx, const uint8 *buffer, uint32 length, uint32 first)
 {
-	uint32 plength_truncat = 0;
+	//uint32 plength_truncat = 0;
 	uint32 offset, plength, PC, SP, GP;
 
 	if (strncmp((char *)buffer, "PS-X EXE", 8) || length < 2048)
@@ -65,7 +65,7 @@ uint32 psf_load_section(PSX_STATE *psx, const uint8 *buffer, uint32 length, uint
 	if (length < 2048 + plength)
 	{
 		//return 0xffffffff;
-		plength_truncat = (2048 + plength) - length;
+		//plength_truncat = (2048 + plength) - length;
 		plength = length - 2048;
 	}
 
@@ -82,10 +82,10 @@ uint32 psf_load_section(PSX_STATE *psx, const uint8 *buffer, uint32 length, uint
     }
 
 	memcpy(&psx->psx_ram[offset/4], buffer + 2048, plength);
-	if (plength_truncat)
+	/*if (plength_truncat)
 	{
 		memset(&psx->psx_ram[plength/4], 0, plength_truncat);
-	}
+	}*/
 
 	if (first)
 	{
@@ -166,7 +166,7 @@ int32 psf_start(PSX_STATE *psx)
 		}
 	}
 #endif
-
+    
 //	psx_ram[0x118b8/4] = LE32(0);	// crash 2 hack
 
 	// backup the initial state for restart
