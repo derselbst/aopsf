@@ -93,14 +93,20 @@ typedef struct
 enum
 {
 	TS_RUNNING = 0,		// now running
-	TS_READY,		// ready to run
+	TS_DORMANT,		// ready to run
 	TS_WAITEVFLAG,		// waiting on an event flag
 	TS_WAITSEMA,		// waiting on a semaphore
 	TS_WAITDELAY,		// waiting on a time delay
 	TS_SLEEPING,		// sleeping
-	TS_CREATED,		// newly created, hasn't run yet
 
 	TS_MAXSTATE
+};
+
+enum WEF_FLAGS
+{
+	WEF_AND = 0x00,
+	WEF_OR = 0x01,
+	WEF_CLEAR = 0x10,
 };
 
 typedef struct
@@ -114,6 +120,12 @@ typedef struct
 	uint32 refCon;		// user value passed in at CreateThread time
 
 	uint32 waitparm;	// what we're waiting on if in one the TS_WAIT* states
+
+	uint32 wakeupcount;
+
+	uint32 waiteventmode;
+	uint32 waiteventmask;
+	uint32 waiteventresultptr;
 
 	uint32 save_regs[37];	// CPU registers belonging to this thread
 } Thread;
@@ -130,13 +142,35 @@ typedef struct
 	uint32 mode;
 } IOPTimer;
 
-typedef struct
-{
-	uint32 count;
-	uint32 mode;
-	uint32 target;
-	uint32 sysclock;
-} Counter;
+#define COUNTERS (6)
+
+struct IOPTIMER_COUNTER {
+	//
+	// quick values used in advance loop, etc.
+	//
+	uint32 save;
+	uint64 counter;
+	uint32 delta;
+	uint64 target;
+	uint8 target_is_overflow;
+	//
+	// other values
+	//
+	uint16 mode;
+	uint16 status;
+	uint64 compare;
+};
+
+struct IOPTIMER_STATE {
+	struct IOPTIMER_COUNTER counter[COUNTERS];
+	uint8 gate;
+	uint64 field_counter;
+	uint64 field_vblank;
+	uint64 field_total;
+	uint32 hz_sysclock;
+	uint32 hz_hline;
+	uint32 hz_pixel;
+};
 
 #define CLOCK_DIV	(8)	// 33 MHz / this = what we run the R3000 at to keep the CPU usage not insane
 
@@ -254,13 +288,13 @@ struct psx_state
   int32 iNumSema;
   Semaphore semaphores[SEMA_MAX];
 
-  int32 iNumThreads, iCurThread;
+  int32 iNumThreads, iCurThread, rescheduleNeeded;
   Thread threads[32];
 
   IOPTimer iop_timers[8];
   int32 iNumTimers;
 
-  Counter root_cnts[3];	// 3 of the bastards
+  struct IOPTIMER_STATE root_cnts;
 
   EvtCtrlBlk *Event;
   EvtCtrlBlk *CounterEvent;
@@ -275,6 +309,14 @@ struct psx_state
 
   int irq_mutex;
 
+  int vblank_samples_until_next;
+
+  char * error_ptr;
+  char error_buffer[32768];
+
+  psx_console_callback_t console_callback;
+  void * console_context;
+
   uint32 offset_to_spu;
 };
 
@@ -284,11 +326,13 @@ extern void mips_init(MIPS_CPU_CONTEXT *);
 extern void mips_reset(MIPS_CPU_CONTEXT *, void *param );
 extern int mips_execute(MIPS_CPU_CONTEXT *, int cycles );
 extern void mips_set_info(MIPS_CPU_CONTEXT *, UINT32 state, union cpuinfo *info);
-extern void psx_hw_init(PSX_STATE *);
+extern void psx_hw_init(PSX_STATE *, uint32 version);
 extern void psx_hw_slice(PSX_STATE *);
 extern void ps2_hw_slice(PSX_STATE *);
 extern void psx_hw_frame(PSX_STATE *);
 extern void ps2_hw_frame(PSX_STATE *);
+
+extern void ps2_reschedule(PSX_STATE *);
 
 extern uint32 mips_get_cause(MIPS_CPU_CONTEXT *);
 extern uint32 mips_get_status(MIPS_CPU_CONTEXT *);

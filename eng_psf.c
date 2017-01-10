@@ -49,8 +49,12 @@ uint32 psf_load_section(PSX_STATE *psx, const uint8 *buffer, uint32 length, uint
 	//uint32 plength_truncat = 0;
 	uint32 offset, plength, PC, SP, GP;
 
+	psx->error_ptr = psx->error_buffer;
+	psx->error_buffer[0] = '\0';
+
 	if (strncmp((char *)buffer, "PS-X EXE", 8) || length < 2048)
 	{
+		psx->error_ptr += sprintf(psx->error_ptr, "Invalid PSX EXE signature.\n");
 		return 0xffffffff;
 	}
 
@@ -102,6 +106,9 @@ int32 psf_start(PSX_STATE *psx)
 	int i;
 	union cpuinfo mipsinfo;
     
+	psx->error_ptr = psx->error_buffer;
+	psx->error_buffer[0] = '\0';
+
 #if DEBUG_DISASM
     psx->mipscpu.file = fopen("/tmp/moo.txt", "w");
 #endif
@@ -146,7 +153,7 @@ int32 psf_start(PSX_STATE *psx)
 	}
 	#endif
 
-	psx_hw_init(psx);
+	psx_hw_init(psx, 1);
 	spu_clear_state(SPUSTATE, 1);
 
 #if 0
@@ -185,7 +192,10 @@ int32 psf_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
 
     int samples_into_frame = psx->samples_into_frame;
 
-    while (samples)
+	psx->error_ptr = psx->error_buffer;
+	psx->error_buffer[0] = '\0';
+
+	while (samples)
     {
         int samples_to_do = samples_per_frame - samples_into_frame;
         if (samples_to_do > samples)
@@ -219,6 +229,9 @@ int32 psf_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
 
 int32 psf_stop(PSX_STATE *psx)
 {
+	psx->error_ptr = psx->error_buffer;
+	psx->error_buffer[0] = '\0';
+
 #if DEBUG_DISASM
     fclose(psx->mipscpu.file);
 #endif
@@ -229,6 +242,9 @@ int32 psf_command(PSX_STATE *psx, int32 command, int32 parameter)
 {
 	union cpuinfo mipsinfo;
 
+	psx->error_ptr = psx->error_buffer;
+	psx->error_buffer[0] = '\0';
+
 	switch (command)
 	{
 		case COMMAND_RESTART:
@@ -236,7 +252,7 @@ int32 psf_command(PSX_STATE *psx, int32 command, int32 parameter)
 
 			mips_init(&psx->mipscpu);
 			mips_reset(&psx->mipscpu, NULL);
-			psx_hw_init(psx);
+			psx_hw_init(psx, 1);
 			spu_clear_state(SPUSTATE, 1);
 
 			mipsinfo.i = psx->initialPC;

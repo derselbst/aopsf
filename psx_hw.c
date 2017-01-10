@@ -56,11 +56,30 @@
 #include "psx_internal.h"
 
 #if DEBUG_THREADING
-static char *_ThreadStateNames[TS_MAXSTATE] = { "RUNNING", "READY", "WAITEVFLAG", "WAITSEMA", "WAITDELAY", "SLEEPING", "CREATED" };
+static char *_ThreadStateNames[TS_MAXSTATE] = { "RUNNING", "DORMANT", "WAITEVFLAG", "WAITSEMA", "WAITDELAY", "SLEEPING" };
 #endif
 
 #if DEBUG_HLE_IOP
 static char *seek_types[3] = { "SEEK_SET", "SEEK_CUR", "SEEK_END" };
+#endif
+
+#if DEBUG_HLE_IOP
+void printlog(PSX_STATE *psx, const char *fmt, ...)
+{
+	if (psx->console_callback)
+	{
+		char buffer[1024];
+
+		va_list vl;
+		va_start(vl, fmt);
+		vsnprintf(buffer, 1023, fmt, vl);
+		va_end(vl);
+
+		buffer[1023] = '\0';
+
+		psx->console_callback(psx->console_context, buffer);
+	}
+}
 #endif
 
 // take a snapshot of the CPU state for a thread
@@ -70,11 +89,12 @@ static void FreezeThread(PSX_STATE *psx, int32 iThread, int flag)
 	union cpuinfo mipsinfo;
 
 	#if DEBUG_THREADING
-//	printf("IOP: FreezeThread(%d)\n", iThread);
+//	printlog(psx, "IOP: FreezeThread(%d)\n", iThread);
 	#endif
 
 	for (i = 0; i < 32; i++)
 	{
+		if (i == 0 || i == 26 || i == 27) continue;
 		mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R0 + i, &mipsinfo);
 		psx->threads[iThread].save_regs[i] = mipsinfo.i;
 	}
@@ -102,19 +122,13 @@ static void FreezeThread(PSX_STATE *psx, int32 iThread, int flag)
 
 	#if DEBUG_THREADING
 	{
-		char buffer[256];
+		//char buffer[256];
 
-		DasmMIPS(buffer, mipsinfo.i, &psx->psx_ram[(mipsinfo.i & 0x7fffffff)/4]);
+		//DasmMIPS(buffer, mipsinfo.i, &psx->psx_ram[(mipsinfo.i & 0x7fffffff)/4]);
 
-		printf("IOP: FreezeThread(%d) => %08x  [%s]\n", iThread, psx->threads[iThread].save_regs[34], buffer);
+		printlog(psx, "IOP: FreezeThread(%d) => %08x\n", iThread, psx->threads[iThread].save_regs[34]);
 	}
 	#endif
-
-	// if thread was running, now it's ready
-	if (psx->threads[iThread].iState == TS_RUNNING)
-	{
-		psx->threads[iThread].iState = TS_READY;
-	}
 }
 
 // restore the CPU state from a thread's snapshot
@@ -125,34 +139,20 @@ static void ThawThread(PSX_STATE *psx, int32 iThread)
 
 	// the first time a thread is put on the CPU,
 	// some special setup is required
-	if (psx->threads[iThread].iState == TS_CREATED)
-	{
-		// PC = starting routine
-		psx->threads[iThread].save_regs[34] = psx->threads[iThread].routine-4;	// compensate for weird delay slot effects
-		// SP = thread's stack area
-		psx->threads[iThread].save_regs[29] = (psx->threads[iThread].stackloc + psx->threads[iThread].stacksize) - 16;
-		psx->threads[iThread].save_regs[29] |= 0x80000000;
-
-		psx->threads[iThread].save_regs[35] = psx->threads[iThread].save_regs[36] = 0;
-
-		#if DEBUG_THREADING
-//		printf("IOP: Initial setup for thread %d => PC %x SP %x\n", iThread, threads[iThread].save_regs[34]+4, threads[iThread].save_regs[29]);
-		#endif
-	}
-
 	#if DEBUG_THREADING
 	{
-		char buffer[256];
+		//char buffer[256];
 
-		mips_get_info(&psx->mipscpu, CPUINFO_INT_PC, &mipsinfo);
-		DasmMIPS(buffer, mipsinfo.i, &psx->psx_ram[(mipsinfo.i & 0x7fffffff)/4]);
+		//mips_get_info(&psx->mipscpu, CPUINFO_INT_PC, &mipsinfo);
+		//DasmMIPS(buffer, mipsinfo.i, &psx->psx_ram[(mipsinfo.i & 0x7fffffff)/4]);
 
-		printf("IOP: ThawThread(%d) => %08x  [%s] (wake %d)\n", iThread, psx->threads[iThread].save_regs[34], buffer, wakecount);
+		printlog(psx, "IOP: ThawThread(%d) => %08x\n", iThread, psx->threads[iThread].save_regs[34]);
 	}
 	#endif
 
 	for (i = 0; i < 32; i++)
 	{
+		if (i == 0 || i == 26 || i == 27) continue;
 		mipsinfo.i = psx->threads[iThread].save_regs[i];
 		mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R0 + i, &mipsinfo);
 	}
@@ -167,16 +167,19 @@ static void ThawThread(PSX_STATE *psx, int32 iThread)
 	mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_DELAYV, &mipsinfo);
 	mipsinfo.i = psx->threads[iThread].save_regs[36];
 	mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_DELAYR, &mipsinfo);
-
-	psx->threads[iThread].iState = TS_RUNNING;
 }
 
 // find a new thread to run
-static void ps2_reschedule(PSX_STATE *psx)
+void ps2_reschedule(PSX_STATE *psx)
 {
 	int i, starti, iNextThread;
 
 	iNextThread = -1;
+
+	if (mips_get_status(&psx->mipscpu) & (1 << 1))
+		return;
+
+	psx->rescheduleNeeded = 0;
 
 	// see if any thread other than the current one is ready to run
 	i = psx->iCurThread+1;
@@ -193,7 +196,7 @@ static void ps2_reschedule(PSX_STATE *psx)
 	{
 		if (i != psx->iCurThread)
 		{
-			if (psx->threads[i].iState == TS_READY)
+			if (psx->threads[i].iState == TS_RUNNING)
 			{
 			  	iNextThread = i;
 				break;
@@ -211,7 +214,7 @@ static void ps2_reschedule(PSX_STATE *psx)
 		{
 			if (i != psx->iCurThread)
 			{
-				if (psx->threads[i].iState == TS_READY)
+				if (psx->threads[i].iState == TS_RUNNING)
 				{
 				  	iNextThread = i;
 					break;
@@ -225,40 +228,22 @@ static void ps2_reschedule(PSX_STATE *psx)
 		#if DEBUG_THREADING
 		for (i = 0; i < psx->iNumThreads; i++)
 		{
-			printf("Thread %02d: %s\n", i, _ThreadStateNames[psx->threads[i].iState]);
+			printlog(psx, "Thread %02d: %s\n", i, _ThreadStateNames[psx->threads[i].iState]);
 		}
 		#endif
 
 		if (psx->iCurThread != -1)
-		{
 			FreezeThread(psx, psx->iCurThread, 0);
-		}
+
 		ThawThread(psx, iNextThread);
 		psx->iCurThread = iNextThread;
 		psx->threads[psx->iCurThread].iState = TS_RUNNING;
 	}
 	else
 	{
-		// no thread to switch to, is the current one still running?
-		if (psx->iCurThread != -1)
+		if (psx->iCurThread != -1 && psx->threads[psx->iCurThread].iState != TS_RUNNING)
 		{
-			if (psx->threads[psx->iCurThread].iState != TS_RUNNING)
-			{
-				#if DEBUG_THREADING
-				printf("IOP: no threads to run\n");
-
-				for (i = 0; i < psx->iNumThreads; i++)
-				{
-					printf("Thread %02d: %s\n", i, _ThreadStateNames[psx->threads[i].iState]);
-				}
-				#endif
-
-				mips_shorten_frame(&psx->mipscpu);	// kill the CPU
-				psx->iCurThread = -1;	// no threads are active
-			}
-		}
-		else
-		{
+			FreezeThread(psx, psx->iCurThread, 0);
 			mips_shorten_frame(&psx->mipscpu);	// kill the CPU
 			psx->iCurThread = -1;	// no threads are active
 		}
@@ -335,7 +320,10 @@ uint32 psx_hw_read(PSX_STATE *psx, offs_t offset, uint32 mem_mask)
 		{
 			return spu_lh(SPUSTATE, offset)<<16;
 		}
-		else printf("SPU: read unknown mask %08x\n", mem_mask);
+		else
+		{
+			psx->error_ptr += sprintf(psx->error_ptr, "SPU: read unknown mask %08x\n", mem_mask);
+		}
 	}
 
 	if (offset >= 0xbf900000 && offset <= 0xbf9007ff)
@@ -352,30 +340,16 @@ uint32 psx_hw_read(PSX_STATE *psx, offs_t offset, uint32 mem_mask)
 		{
 			return spu_lh(SPUSTATE, offset) | spu_lh(SPUSTATE, offset+2)<<16;
 		}
-		else printf("SPU2: read unknown mask %08x\n", mem_mask);
+		else
+		{
+			psx->error_ptr += sprintf(psx->error_ptr, "SPU2: read unknown mask %08x\n", mem_mask);
+		}
 	}
 
-	if (offset >= 0x1f801100 && offset <= 0x1f801128)
+	if ((offset >= 0x1f801100 && offset <= 0x1f80112f) ||
+		(offset >= 0x1f801480 && offset <= 0x1f8014af))
 	{
-		int cnt = (offset>>4) & 0xf;
-
-		switch (offset & 0xf)
-		{
-			case 0:
-//				printf("RC: read counter %d count = %x\n", cnt, root_cnts[cnt].count);
-				return psx->root_cnts[cnt].count;
-				break;
-			case 4:
-//				printf("RC: read counter %d mode\n", cnt);
-				return psx->root_cnts[cnt].mode;
-				break;
-			case 8:
-//				printf("RC: read counter %d target\n", cnt);
-				return psx->root_cnts[cnt].target;
-				break;
-		}
-
-		return 0;
+		return ioptimer_lw(&psx->root_cnts, offset, mem_mask);
 	}
 
     if (offset == 0x1f8010f0)
@@ -459,7 +433,7 @@ static void ps2_dma4(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 	if (chcr == 0x01000201)	// cpu to SPU2
 	{
 		#if DEBUG_HLE_IOP
-		printf("DMA4: RAM %08x to SPU2\n", madr);
+		printlog(psx, "DMA4: RAM %08x to SPU2\n", madr);
 		#endif
 		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
 		spu_dma(SPUSTATE, 0, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 1);
@@ -468,7 +442,7 @@ static void ps2_dma4(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 	else
 	{
 		#if DEBUG_HLE_IOP
-		printf("DMA4: SPU2 to RAM %08x\n", madr);
+		printlog(psx, "DMA4: SPU2 to RAM %08x\n", madr);
 		#endif
 		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
 		spu_dma(SPUSTATE, 0, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 0);
@@ -490,7 +464,7 @@ static void ps2_dma7(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 	if ((chcr == 0x01000201) || (chcr == 0x00100010) || (chcr == 0x000f0010) || (chcr == 0x00010010))	// cpu to SPU2
 	{
 		#if DEBUG_HLE_IOP
-		printf("DMA7: RAM %08x to SPU2\n", madr);
+		printlog(psx, "DMA7: RAM %08x to SPU2\n", madr);
 		#endif
 		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
 		spu_dma(SPUSTATE, 1, psx->psx_ram, madr & 0x1ffffc, 0x1ffffc, bcr, 1);
@@ -499,7 +473,7 @@ static void ps2_dma7(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 	else
 	{
 		#if DEBUG_HLE_IOP
-		printf("DMA7: SPU2 to RAM %08x\n", madr);
+		printlog(psx, "DMA7: SPU2 to RAM %08x\n", madr);
 		#endif
 		bcr = (bcr>>16) * (bcr & 0xffff) * 4;
 //		SPU2readDMA7Mem(madr&0x1fffff, bcr);
@@ -511,6 +485,297 @@ static void ps2_dma7(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
         delay = 1;
     
 	psx->dma7_delay = delay;
+}
+
+#define IOP_INT_VBLANK  (1<<0)
+#define IOP_INT_RTC0    (1<<4)
+#define IOP_INT_RTC1    (1<<5)
+#define IOP_INT_RTC2    (1<<6)
+#define IOP_INT_RTC3    (1<<14)
+#define IOP_INT_RTC4    (1<<15)
+#define IOP_INT_RTC5    (1<<16)
+
+static const uint32 intrflag[COUNTERS] = {
+	IOP_INT_RTC0, IOP_INT_RTC1, IOP_INT_RTC2,
+	IOP_INT_RTC3, IOP_INT_RTC4, IOP_INT_RTC5
+};
+
+void ioptimer_set_rates(struct IOPTIMER_STATE *state, uint32 sysclock, uint32 dots, uint32 lines, uint32 lines_visible, uint32 refresh_rate) {
+	state->hz_sysclock = sysclock;
+	state->hz_hline = lines * refresh_rate;
+	state->hz_pixel = state->hz_hline * dots;
+
+	state->field_counter = 0;
+	state->field_vblank = ((uint64)(lines_visible)) * ((uint64)(sysclock));
+	state->field_total = ((uint64)(lines)) * ((uint64)(sysclock));
+}
+
+static uint32 EMU_CALL cycles_until_gate(struct IOPTIMER_STATE *state) {
+	uint64 diff;
+	if (!(state->hz_hline)) return 0xFFFFFFFF;
+	if (state->field_counter < state->field_vblank) {
+		diff = state->field_vblank - state->field_counter;
+	}
+	else {
+		diff = state->field_total - state->field_counter;
+	}
+	diff += (state->hz_hline - 1);
+	diff /= ((uint64)(state->hz_hline));
+	if (diff > 0xFFFFFFFF) diff = 0xFFFFFFFF;
+	if (diff < 1) diff = 1;
+	return (uint32)diff;
+}
+
+uint32 ioptimer_cycles_until_interrupt(struct IOPTIMER_STATE *state) {
+	uint32 min = cycles_until_gate(state);
+	uint32 c;
+	//
+	// counters
+	//
+	for (c = 0; c < COUNTERS; c++) {
+		uint64 diff;
+		if (!(state->counter[c].delta)) continue;
+		if (state->counter[c].counter >= state->counter[c].target) {
+			diff = 0;
+		}
+		else {
+			diff = state->counter[c].target - state->counter[c].counter;
+			diff += (state->counter[c].delta - 1);
+			diff /= ((uint64)(state->counter[c].delta));
+		}
+		if (diff < ((uint64)(min))) min = (uint32)diff;
+	}
+	if (min < 1) min = 1;
+	return min;
+}
+
+static uint32 counters_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
+	uint32 intr = 0;
+	uint32 c;
+	for (c = 0; c < COUNTERS; c++) {
+		struct IOPTIMER_COUNTER *ctr = state->counter + c;;
+		if (!ctr->delta) continue;
+		ctr->counter += ((uint64)(cycles)) * ((uint64)(ctr->delta));
+		//
+		// timer loop handling
+		//
+		for (;;) {
+			//
+			// if we're below the given target, then good - quit.
+			//
+			if (ctr->counter < ctr->target) break;
+			//
+			// otherwise, we have a transition to make.
+			//
+			if (ctr->target_is_overflow) {
+				ctr->status |= 0x1000;
+				if (ctr->mode & 0x20) intr |= intrflag[c];
+				// counter always loops on overflow (duh!)
+				ctr->counter -= ctr->target;
+				// counter now becomes the compare target
+				ctr->target = ((uint64)(state->hz_sysclock)) * ((uint64)(ctr->compare));
+				ctr->target_is_overflow = 0;
+			}
+			else {
+				ctr->status |= 0x800;
+				if (ctr->mode & 0x10) intr |= intrflag[c];
+				// counter only loops on target if the appropriate bit is set
+				if (ctr->mode & 8) {
+					// no change to target, just loop counter
+					ctr->counter -= ctr->target;
+					// no target loop - proceed to overflow
+				}
+				else {
+					if (c < 3) {
+						ctr->target = ((uint64)(state->hz_sysclock)) << 16;
+					}
+					else {
+						ctr->target = ((uint64)(state->hz_sysclock)) << 32;
+					}
+					ctr->target_is_overflow = 1;
+				}
+			}
+		}
+	}
+	return intr;
+}
+
+static void counter_start(struct IOPTIMER_STATE *state, uint32 c) {
+	struct IOPTIMER_COUNTER *ctr = state->counter + c;
+	uint32 delta = state->hz_sysclock;
+	switch (c) {
+	case 0: if (ctr->mode & 0x100) { delta = state->hz_pixel; } break;
+	case 1: if (ctr->mode & 0x100) { delta = state->hz_hline; } break;
+	case 2: if (ctr->mode & 0x200) { delta /= 8; } break;
+	case 3: if (ctr->mode & 0x100) { delta = state->hz_hline; } break;
+	case 4: case 5:
+		switch ((ctr->mode >> 13) & 3) {
+		case 0: delta /= 1; break;
+		case 1: delta /= 8; break;
+		case 2: delta /= 16; break;
+		case 3: delta /= 256; break;
+		}
+		break;
+	}
+	ctr->counter = 0;
+	ctr->delta = delta;
+	ctr->target = ((uint64)(ctr->compare)) * ((uint64)(state->hz_sysclock));
+	ctr->target_is_overflow = 0;
+}
+
+static void counter_stop(struct IOPTIMER_STATE *state, uint32 c) {
+	state->counter[c].delta = 0;
+}
+
+static void gate_transition(struct IOPTIMER_STATE *state) {
+	uint32 c;
+	for (c = 0; c < COUNTERS; c++) {
+		// must be both enabled and gate-enabled
+		if ((state->counter[c].mode & 0x41) != 0x41) continue;
+		switch (state->counter[c].mode & 0x6) {
+		case 0x0: // TM_GATE_ON_Count
+			if (state->gate) { counter_start(state, c); }
+			else { counter_stop(state, c); }
+			break;
+		case 0x2: // TM_GATE_ON_ClearStart
+			if (state->gate) { counter_start(state, c); }
+			break;
+		case 0x4: // TM_GATE_ON_Clear_OFF_Start
+			if (state->gate) { counter_stop(state, c); }
+			else { counter_start(state, c); }
+			break;
+		case 0x6: // TM_GATE_ON_Start
+			if (state->gate) {
+				// one-time start: disable gate bit
+				state->counter[c].mode &= ~1;
+				counter_start(state, c);
+			}
+			break;
+		}
+	}
+}
+
+static uint32 gate_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
+	uint32 intr = 0;
+	state->field_counter += ((uint64)(cycles)) * ((uint64)(state->hz_hline));
+	//
+	// gate overflow loop
+	//
+	for (;;) {
+		//
+		// if we're below the given target, then good - quit.
+		//
+		if (state->gate) {
+			if (state->field_counter < state->field_vblank) break;
+			//
+			// gate transition 1->0
+			//
+			state->gate = 0;
+			gate_transition(state);
+			intr |= IOP_INT_VBLANK;
+		}
+		else {
+			if (state->field_counter < state->field_total) break;
+			//
+			// gate transition 0->1
+			//
+			state->gate = 1;
+			gate_transition(state);
+			state->field_counter -= state->field_total;
+		}
+	}
+	return intr;
+}
+
+uint32 ioptimer_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
+	uint32 intr = 0;
+	uint32 cycles_left = cycles;
+	while (cycles_left) {
+		uint32 g = cycles_until_gate(state);
+		if (g > cycles_left) g = cycles_left;
+		intr |= counters_advance(state, g);
+		intr |= gate_advance(state, g);
+		cycles_left -= g;
+	}
+	return intr;
+}
+
+uint32 ioptimer_lw(struct IOPTIMER_STATE *state, offs_t offset, uint32 mem_mask)
+{
+	uint32 d = 0;
+	uint32 c = (offset >> 4) & 0xf;
+	struct IOPTIMER_COUNTER *ctr;
+	if (offset >= 0x1f801480)
+		c -= 5;
+	if (c >= COUNTERS) return 0;
+	ctr = state->counter + c;
+	switch (offset & 0xc)
+	{
+	case 0:
+		if (ctr->delta) { d = (uint32)((ctr->counter) / (uint64)(ctr->delta)); }
+		break;
+	case 4:
+		d = ctr->status;
+		ctr->status = 0;
+		break;
+	case 8:
+		d = (uint32)(ctr->compare);
+		break;
+	}
+	if (c < 3) d &= 0xffff;
+	return d & ~mem_mask;
+}
+
+void ioptimer_sw(struct IOPTIMER_STATE *state, offs_t offset, uint32 data, uint32 mem_mask)
+{
+	int c = (offset >> 4) & 0xf;
+	struct IOPTIMER_COUNTER *ctr;
+	if (offset >= 0x1f801480)
+		c -= 5;
+	if (c >= COUNTERS) return;
+	ctr = state->counter + c;
+
+	data &= ~mem_mask;
+	if (c < 3)
+		data &= 0xffff;
+
+	switch (offset & 0xc)
+	{
+	case 4:
+		ctr->delta = 0;
+		ctr->mode = data;
+		if (data & 0x40) {
+			if ((data & 7) != 7) {
+				counter_start(state, c);
+			}
+		}
+		break;
+	case 8:
+		ctr->compare = data;
+		if (!ctr->compare) {
+			if (c < 3) {
+				ctr->compare = 0x10000;
+			}
+			else {
+				ctr->compare = 0x100000000;
+			}
+		}
+
+		if (ctr->delta) {
+			ctr->target = ctr->compare * ((uint64)(state->hz_sysclock));
+			ctr->target_is_overflow = 0;
+			if (ctr->counter >= ctr->target) {
+				if (c < 3) {
+					ctr->target = ((uint64)(state->hz_sysclock)) << 16;
+				}
+				else {
+					ctr->target = ((uint64)(state->hz_sysclock)) << 32;
+				}
+				ctr->target_is_overflow = 1;
+			}
+		}
+		break;
+	}
 }
 
 void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
@@ -559,7 +824,10 @@ void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
 			spu_sh(SPUSTATE, offset, data>>16);
 			return;
 		}
-		else printf("SPU: write unknown mask %08x\n", mem_mask);
+		else
+		{
+			psx->error_ptr += sprintf(psx->error_ptr, "SPU: write unknown mask %08x\n", mem_mask);
+		}
 	}
 
 	if (offset >= 0xbf900000 && offset <= 0xbf9007ff)
@@ -580,29 +848,16 @@ void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
 			spu_sh(SPUSTATE, offset+2, data>>16);
 			return;
 		}
-		else printf("SPU2: write unknown mask %08x\n", mem_mask);
+		else
+		{
+			psx->error_ptr += sprintf(psx->error_ptr, "SPU2: write unknown mask %08x\n", mem_mask);
+		}
 	}
 
-	if (offset >= 0x1f801100 && offset <= 0x1f801128)
+	if ((offset >= 0x1f801100 && offset <= 0x1f80112f) ||
+		(offset >= 0x1f801480 && offset <= 0x1f8014af))
 	{
-		int cnt = (offset>>4) & 0xf;
-
-		switch (offset & 0xf)
-		{
-			case 0:
-				psx->root_cnts[cnt].count = data;
-//				printf("RC: counter %d count = %x\n", cnt, data);
-				break;
-			case 4:
-				psx->root_cnts[cnt].mode = data;
-//				printf("RC: counter %d mode = %x\n", cnt, data);
-				break;
-			case 8:
-				psx->root_cnts[cnt].target = data;
-//				printf("RC: counter %d target = %x\n", cnt, data);
-				break;
-		}
-
+		ioptimer_sw(&psx->root_cnts, offset, data, mem_mask);
 		return;
 	}
 
@@ -759,7 +1014,7 @@ void ps2_hw_slice(PSX_STATE *psx)
 	}
 	else	// no thread, don't run CPU, just update counters
 	{
-		if (psx->timerexp)
+		if (psx->timerexp || psx->rescheduleNeeded)
 		{
 			ps2_reschedule(psx);
 
@@ -774,12 +1029,13 @@ void ps2_hw_slice(PSX_STATE *psx)
 
 void psx_hw_frame(PSX_STATE *psx)
 {
-	psx_irq_set(psx, 1);
+	//psx_irq_set(psx, 1);
 }
 
 void ps2_hw_frame(PSX_STATE *psx)
 {
-	ps2_reschedule(psx);
+	if (!psx->irq_mutex)
+		ps2_reschedule(psx);
 }
 
 // BIOS HLE
@@ -796,7 +1052,7 @@ static void call_irq_routine(PSX_STATE *psx, uint32 routine, uint32 parameter)
 	}
 	else
 	{
-		printf("IOP: ERROR!  IRQ reentry!\n");
+		psx->error_ptr += sprintf(psx->error_ptr, "IOP: ERROR!  IRQ reentry!\n");
 		return;
 	}
 
@@ -866,6 +1122,8 @@ void psx_bios_exception(PSX_STATE *psx, uint32 pc)
 	uint32 a0, status;
 	union cpuinfo mipsinfo;
 	int i, oldICount;
+
+	psx->rescheduleNeeded = 0;
 
 //	printf("bios_exception: cause %x\n", mips_get_cause() & 0x3c);
 
@@ -1055,6 +1313,11 @@ void psx_bios_exception(PSX_STATE *psx, uint32 pc)
 			#endif
 			break;
 	}
+
+	if (psx->rescheduleNeeded)
+	{
+		ps2_reschedule(psx);
+	}
 }
 
 static uint32 calc_ev(uint32 a0)
@@ -1105,7 +1368,19 @@ uint32 psx_get_state_size(uint32 version)
 	return sizeof(PSX_STATE) + spu_get_state_size(version);
 }
 
-void psx_hw_init(PSX_STATE *psx)
+const char * psx_get_last_error(PSX_STATE *psx)
+{
+	if (psx->error_buffer[0]) return psx->error_buffer;
+	else return NULL;
+}
+
+void   psx_register_console_callback(PSX_STATE *psx, psx_console_callback_t callback, void * context)
+{
+	psx->console_callback = callback;
+	psx->console_context = context;
+}
+
+void psx_hw_init(PSX_STATE *psx, uint32 version)
 {
     spucore_init();
     
@@ -1164,12 +1439,21 @@ void psx_hw_init(PSX_STATE *psx)
     
     psx->stop = 0;
 
-	psx->root_cnts[0].mode = RC_EN;
-	psx->root_cnts[1].mode = RC_EN;
-	psx->root_cnts[2].mode = RC_EN;
-	psx->root_cnts[0].sysclock = 0;
-	psx->root_cnts[1].sysclock = 0;
-	psx->root_cnts[2].sysclock = 0;
+	psx->rescheduleNeeded = 0;
+
+	if (psx->psf_refresh != 50 && psx->psf_refresh != 60)
+		psx->psf_refresh = 60;
+
+	memset(&psx->root_cnts, 0, sizeof(psx->root_cnts));
+	if (psx->psf_refresh == 50 || psx->psf_refresh == 60) {
+		ioptimer_set_rates(&psx->root_cnts,
+			(version == 1) ? 33868800 : 36864000,
+			(version == 1) ? 429 : 858,
+			(psx->psf_refresh == 60) ? 262 : 312,
+			(psx->psf_refresh == 60) ? 224 : 240,
+			psx->psf_refresh
+		);
+	}
 
 	psx->offset_to_spu = sizeof(PSX_STATE);
 }
@@ -1184,10 +1468,10 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 	if ((pc == 0) || (pc == 0x80000000))  	 	// IOP "null" state
 	{
 		#if DEBUG_HLE_IOP
-		printf("IOP 'null' state\n");
+		printlog(psx, "IOP 'null' state\n");
 		#endif
 //		ao_song_done = 1;
-        psx->stop = 1;
+//        psx->stop = 1;
         // emergency, we may be stuck inside an interrupt handler
         psx->softcall_target = 1;
         mips_shorten_frame(&psx->mipscpu);
@@ -1709,6 +1993,9 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 					status = mips_get_status(&psx->mipscpu);
 					status = (status & 0xfffffff0) | ((status & 0x3c)>>2);
 					mips_set_status(&psx->mipscpu, status);
+
+					ps2_reschedule(psx);
+
 					return;	// force return to avoid PC=RA below
 					break;
 
@@ -1771,7 +2058,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 void psx_hw_runcounters(PSX_STATE *psx)
 {
-	int i, j;
+	int i, j, intr;
 	union cpuinfo mipsinfo;
 
 	// don't process any IRQ sources when interrupts are suspended
@@ -1818,11 +2105,11 @@ void psx_hw_runcounters(PSX_STATE *psx)
 				else	// time's up
 				{
 					psx->threads[i].waitparm = 0;
-					psx->threads[i].iState = TS_READY;
+					psx->threads[i].iState = TS_RUNNING;
 
 					psx->timerexp = 1;
 
-					ps2_reschedule(psx);
+					psx->rescheduleNeeded = 1;
 				}
 			}
 		}
@@ -1851,34 +2138,9 @@ void psx_hw_runcounters(PSX_STATE *psx)
 	}
 
 // PS1 root counters
-	for (i = 0; i < 3; i++)
-	{
-		if ((!(psx->root_cnts[i].mode & RC_EN)) && (psx->root_cnts[i].mode != 0))
-		{
-			if (psx->root_cnts[i].mode & RC_DIV8)
-			{
-				psx->root_cnts[i].count += 768/8;
-			}
-			else
-			{
-				psx->root_cnts[i].count += 768;
-			}
-
-			if (psx->root_cnts[i].count >= psx->root_cnts[i].target)
-			{
-				if (!(psx->root_cnts[i].mode & RC_RESET))
-				{
-					psx->root_cnts[i].mode |= RC_EN;
-				}
-				else
-				{
-					psx->root_cnts[i].count %= psx->root_cnts[i].target;
-				}
-
-				psx_irq_set(psx, 1<<(4+i));
-			}
-		}
-	}
+	intr = ioptimer_advance(&psx->root_cnts, 768);
+	if (intr && !psx->intr_susp)
+		psx_irq_set(psx, intr);
 }
 
 // PEOpS callbacks
@@ -1957,13 +2219,29 @@ void program_write_dword_32le(void *state, offs_t address, uint32 data)
 	psx_hw_write((PSX_STATE *)state, address, data, 0);
 }
 
+static uint32 ccallArgumentIterator_GetNext(PSX_STATE *psx, uint32 current)
+{
+	union cpuinfo mipsinfo;
+	if (current > 3)
+	{
+		mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R29, &mipsinfo); // SP
+		mipsinfo.i += (current - 4) * 4 + 0x10;
+		return psx_hw_read(psx, mipsinfo.i, 0);
+	}
+	else
+	{
+		mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R4 + current, &mipsinfo); // A0 - A3
+		return mipsinfo.i;
+	}
+}
+
 // sprintf replacement
 static void iop_sprintf(PSX_STATE *psx, char *out, char *fmt, uint32 pstart)
 {
 	char temp[64], tfmt[64];
 	char *cf, *pstr;
-	union cpuinfo mipsinfo;
 	int curparm, fp, isnum;
+	uint32 value;
 
 	curparm = pstart;
 	cf = fmt;
@@ -2022,18 +2300,18 @@ static void iop_sprintf(PSX_STATE *psx, char *out, char *fmt, uint32 pstart)
 
 			if (isnum)
 			{
-				mips_get_info(&psx->mipscpu, curparm, &mipsinfo);
+				value = ccallArgumentIterator_GetNext(psx, curparm);
 //				printf("parameter %d = %x\n", curparm-pstart, mipsinfo.i);
 				curparm++;
-				sprintf(temp, tfmt, (int32)mipsinfo.i);
+				sprintf(temp, tfmt, (int32)value);
 			}
 			else
 			{
-				mips_get_info(&psx->mipscpu, curparm, &mipsinfo);
+				value = ccallArgumentIterator_GetNext(psx, curparm);
 				curparm++;
 
 				pstr = (char *)psx->psx_ram;
-				pstr += (mipsinfo.i & 0x1fffff);
+				pstr += (value & 0x1fffff);
 
 				sprintf(temp, tfmt, pstr);
 			}
@@ -2051,6 +2329,36 @@ static void iop_sprintf(PSX_STATE *psx, char *out, char *fmt, uint32 pstart)
 	}
 
 	*out = '\0';
+}
+
+int ProcessEventFlag(uint32 mode, uint32 * value, uint32 mask, uint32* resultPtr)
+{
+	int success = 0;
+	uint32 maskResult = *value & mask;
+
+	if (mode & WEF_OR)
+	{
+		success = (maskResult != 0);
+	}
+	else
+	{
+		success = (maskResult == mask);
+	}
+
+	if (success)
+	{
+		if (resultPtr)
+		{
+			*resultPtr = *value;
+		}
+
+		if (mode & WEF_CLEAR)
+		{
+			*value = 0;
+		}
+	}
+
+	return success;
 }
 
 // PS2 IOP callbacks
@@ -2082,7 +2390,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 	if (psx->psx_ram[scan] != LE32(0x41e00000))
 	{
-		printf("FATAL ERROR: couldn't find IOP link signature\n");
+		psx->error_ptr += sprintf(psx->error_ptr, "FATAL ERROR: couldn't find IOP link signature\n");
 		return;
 	}
 
@@ -2090,7 +2398,13 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 	memcpy(name, &psx->psx_ram[scan], 8);
 	name[8] = '\0';
 
-//	printf("IOP: call module [%s] service %d (PC=%08x)\n", name, callnum, pc);
+#if 0
+	if (psx->console_callback)
+	{
+		sprintf(out, "IOP: call module [%s] service %d (PC=%08x)\n", name, callnum, pc);
+		psx->console_callback(psx->console_context, out);
+	}
+#endif
 
 	if (!strcmp(name, "stdio"))
 	{
@@ -2101,20 +2415,21 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				mname += a0 & 0x1fffff;
 				mname += (a0 & 3);
 
-				iop_sprintf(psx, out, mname, CPUINFO_INT_REGISTER + MIPS_R5);	// a1 is first parm
+				iop_sprintf(psx, out, mname, 1);	// a1 is first parm
 
 			/*	if (out[strlen(out)-1] != '\n')
 				{
 					strcat(out, "\n");
 				}*/
+				if (psx->console_callback)
+				{
+					psx->console_callback(psx->console_context, out);
+				}
 
-				#if DEBUG_HLE_IOP
-				printf("%s", out);
-				#endif
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 	}
@@ -2124,7 +2439,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 		{
 			case 5:	// sceSifInit
 				#if DEBUG_HLE_IOP
-				printf("IOP: sceSifInit()\n");
+				printlog(psx, "IOP: sceSifInit()\n");
 				#endif
 
 				mipsinfo.i = 0;
@@ -2133,16 +2448,16 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 7: // sceSifSetDma
 				#if DEBUG_HLE_IOP
-				printf("IOP: sceSifSetDma(%08x %08x)\n", a0, a1);
+				printlog(psx, "IOP: sceSifSetDma(%08x %08x)\n", a0, a1);
 				#endif
 
-				mipsinfo.i = 1;	// nonzero = success
+				mipsinfo.i = a1;
 				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			case 8:	// sceSifDmaStat
 				#if DEBUG_HLE_IOP
-				printf("IOP: sceSifDmaStat(%08x)\n", a0);
+				printlog(psx, "IOP: sceSifDmaStat(%08x)\n", a0);
 				#endif
 
 				mipsinfo.i = -1;	// dma completed
@@ -2151,7 +2466,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 29: // sceSifCheckInit
 				#if DEBUG_HLE_IOP
-				printf("IOP: sceSifCheckInit()\n");
+				printlog(psx, "IOP: sceSifCheckInit()\n");
 				#endif
 
 				mipsinfo.i = 1;
@@ -2159,7 +2474,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 	}
@@ -2171,14 +2486,34 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 		{
 			case 4:	// CreateThread
 				#if DEBUG_THREADING
-				printf("IOP: CreateThread(%08x)\n", a0);
+				printlog(psx, "IOP: CreateThread(%08x)\n", a0);
 				#endif
 				a0 &= 0x1fffff;
 				a0 /= 4;
 				#if DEBUG_THREADING
-				printf("   : flags %x routine %08x pri %x stacksize %d refCon %08x\n",
+				printlog(psx, "   : flags %x routine %08x pri %x stacksize %d refCon %08x\n",
 					psx->psx_ram[a0], psx->psx_ram[a0+1], psx->psx_ram[a0+2], psx->psx_ram[a0+3], psx->psx_ram[a0+4]);
 				#endif
+				if (psx->iNumThreads == 32)
+				{
+					psx->stop = 1;
+				}
+
+				psx->threads[psx->iNumThreads].iState = TS_DORMANT;
+				psx->threads[psx->iNumThreads].flags = LE32(psx->psx_ram[a0]);
+				psx->threads[psx->iNumThreads].routine = LE32(psx->psx_ram[a0+2]);
+				psx->threads[psx->iNumThreads].stacksize = LE32(psx->psx_ram[a0+3]);
+				psx->threads[psx->iNumThreads].refCon = LE32(psx->psx_ram[a0+4]);
+				psx->threads[psx->iNumThreads].wakeupcount = 0;
+
+				if (psx->threads[psx->iNumThreads].stacksize == 0)
+				{
+					psx->threads[psx->iNumThreads].stacksize = 0x4000;
+				}
+
+				psx->threads[psx->iNumThreads].stacksize = (psx->threads[psx->iNumThreads].stacksize + 3) & ~0x3;
+				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R28, &mipsinfo);
+				psx->threads[psx->iNumThreads].save_regs[28] = mipsinfo.i;
 
 				newAlloc = psf2_get_loadaddr(psx);
 				// force 16-byte alignment
@@ -2187,14 +2522,14 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					newAlloc &= ~0xf;
 					newAlloc += 16;
 				}
-				psf2_set_loadaddr(psx, newAlloc + LE32(psx->psx_ram[a0+3]));
+				psf2_set_loadaddr(psx, newAlloc + psx->threads[psx->iNumThreads].stacksize);
 
-				psx->threads[psx->iNumThreads].iState = TS_CREATED;
 				psx->threads[psx->iNumThreads].stackloc = newAlloc;
-				psx->threads[psx->iNumThreads].flags = LE32(psx->psx_ram[a0]);
-				psx->threads[psx->iNumThreads].routine = LE32(psx->psx_ram[a0+2]);
-				psx->threads[psx->iNumThreads].stacksize = LE32(psx->psx_ram[a0+3]);
-				psx->threads[psx->iNumThreads].refCon = LE32(psx->psx_ram[a0+4]);
+
+				memset(&psx->psx_ram[newAlloc / 4], 0, psx->threads[psx->iNumThreads].stacksize);
+
+				psx->threads[psx->iNumThreads].save_regs[29] = (psx->threads[psx->iNumThreads].stackloc + psx->threads[psx->iNumThreads].stacksize - 0x10) | 0x80000000;
+				psx->threads[psx->iNumThreads].save_regs[35] = psx->threads[psx->iNumThreads].save_regs[36] = 0;
 
 				mipsinfo.i = psx->iNumThreads;
 				psx->iNumThreads++;
@@ -2203,17 +2538,60 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 6:	// StartThread
 				#if DEBUG_THREADING
-				printf("IOP: StartThread(%d %d)\n", a0, a1);
+				printlog(psx, "IOP: StartThread(%d %d)\n", a0, a1);
 				#endif
 
-				FreezeThread(psx, psx->iCurThread, 1);
-				ThawThread(psx, a0);
-				psx->iCurThread = a0;
+				if (psx->threads[a0].iState != TS_DORMANT)
+				{
+					#if DEBUG_THREADING
+					printlog(psx, "IOP: Thread not ready!\n");
+					#endif
+					return;
+				}
+
+				psx->threads[a0].iState = TS_RUNNING;
+				psx->threads[a0].save_regs[4] = a1;
+				psx->threads[a0].save_regs[34] = psx->threads[a0].routine;
+				psx->threads[a0].save_regs[29] = psx->threads[a0].stackloc + psx->threads[a0].stacksize - 0x10;
+				psx->rescheduleNeeded = 1;
+
+				break;
+
+			case 7: // StartThreadArgs
+				#if DEBUG_THREADING
+				printlog(psx, "IOP: StartThreadArgs(%d %d %08X", a0, a1, a2);
+				#endif
+
+				if (psx->threads[a0].iState != TS_DORMANT)
+				{
+					#if DEBUG_THREADING
+					printlog(psx, "IOP: Thread not ready!\n");
+					#endif
+					return;
+				}
+
+				psx->threads[a0].iState = TS_RUNNING;
+				psx->threads[a0].save_regs[4] = a1;
+
+				{
+					uint32 stackAddress = psx->threads[a0].stackloc + psx->threads[a0].stacksize;
+					uint32 fixedSize = ((a1 + 0x3) & ~0x3);
+					uint32 copyAddress = stackAddress - a1;
+					stackAddress -= fixedSize;
+					memcpy(((uint8*)psx->psx_ram) + copyAddress, ((uint8*)psx->psx_ram) + a2, a1);
+					psx->threads[a0].save_regs[29] = stackAddress - 0x10;
+					psx->threads[a0].save_regs[5] = copyAddress;
+				}
+
+				psx->threads[a0].save_regs[34] = psx->threads[a0].routine;
+
+				psx->rescheduleNeeded = 1;
+
 				break;
 
 			case 20:// GetThreadID
 				#if DEBUG_THREADING
-				printf("IOP: GetThreadId()\n");
+				printlog(psx, "IOP: GetThreadId()\n");
 				#endif
 
 				mipsinfo.i = psx->iCurThread;
@@ -2223,35 +2601,67 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 			case 24:// SleepThread
 				#if DEBUG_THREADING
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printf("IOP: SleepThread() [curThread %d, PC=%x]\n", psx->iCurThread, mipsinfo.i);
+				printlog(psx, "IOP: SleepThread() [curThread %d, PC=%x]\n", psx->iCurThread, mipsinfo.i);
 				#endif
 
-				FreezeThread(psx, psx->iCurThread, 1);
-				psx->threads[psx->iCurThread].iState = TS_SLEEPING;
-				psx->iCurThread = -1;
+				if (psx->threads[psx->iCurThread].iState != TS_RUNNING)
+				{
+					#if DEBUG_THREADING
+					printlog(psx, "IOP: Thread not running!\n");
+					#endif
+					psx->stop = 1;
+					return;
+				}
 
-				ps2_reschedule(psx);
+				if (psx->threads[psx->iCurThread].wakeupcount == 0)
+				{
+					psx->threads[psx->iCurThread].iState = TS_SLEEPING;
+					psx->rescheduleNeeded = 1;
+				}
+				else
+				{
+					psx->threads[psx->iCurThread].wakeupcount--;
+				}
+				mipsinfo.i = 0;
+				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			case 25:// WakeupThread
 				#if DEBUG_THREADING
-				printf("IOP: WakeupThread(%d)\n", a0);
+				printlog(psx, "IOP: WakeupThread(%d)\n", a0);
 				#endif
 
 				// set thread to "ready to go"
-				psx->threads[a0].iState = TS_READY;
+				if (psx->threads[a0].iState == TS_SLEEPING)
+				{
+					psx->threads[a0].iState = TS_RUNNING;
+					psx->rescheduleNeeded = 1;
+				}
+				else
+				{
+					psx->threads[a0].wakeupcount++;
+				}
+				mipsinfo.i = psx->threads[a0].wakeupcount;
+				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			case 26:// iWakeupThread
 				#if DEBUG_THREADING
-				printf("IOP: iWakeupThread(%d)\n", a0);
+				printlog(psx, "IOP: iWakeupThread(%d)\n", a0);
 				#endif
 
 				// set thread to "ready to go" if it's not running
-				if (psx->threads[a0].iState != TS_RUNNING)
+				if (psx->threads[a0].iState == TS_SLEEPING)
 				{
-					psx->threads[a0].iState = TS_READY;
+					psx->threads[a0].iState = TS_RUNNING;
+					psx->rescheduleNeeded = 1;
 				}
+				else
+				{
+					psx->threads[a0].wakeupcount++;
+				}
+				mipsinfo.i = psx->threads[a0].wakeupcount;
+				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			case 33:// DelayThread
@@ -2261,7 +2671,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 					#if DEBUG_THREADING
 					mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-					printf("IOP: DelayThread(%d) (PC=%x) [curthread = %d]\n", a0, mipsinfo.i, psx->iCurThread);
+					printlog(psx, "IOP: DelayThread(%d) (PC=%x) [curthread = %d]\n", a0, mipsinfo.i, psx->iCurThread);
 					#endif
 
 					if (a0 < 100)
@@ -2270,20 +2680,17 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					}
 					dTicks = (double)a0;
 
-					FreezeThread(psx, psx->iCurThread, 1);
 					psx->threads[psx->iCurThread].iState = TS_WAITDELAY;
 					dTicks /= (double)1000000.0;
 					dTicks *= (double)36864000.0;	// 768*48000 = IOP native-mode clock rate
 					psx->threads[psx->iCurThread].waitparm = (uint32)dTicks;
-					psx->iCurThread = -1;
-
-					ps2_reschedule(psx);
+					psx->rescheduleNeeded = 1;
 				}
 				break;
 
 			case 34://GetSystemTime
 				#if DEBUG_HLE_IOP
-				printf("IOP: GetSystemTime(%x)\n", a0);
+				printlog(psx, "IOP: GetSystemTime(%x)\n", a0);
 				#endif
 
 				a0 &= 0x1fffff;
@@ -2302,7 +2709,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					uint32 hi, lo;
 
 					#if DEBUG_HLE_IOP
-					printf("IOP: USec2SysClock(%d %08x)\n", a0, a1);
+					printlog(psx, "IOP: USec2SysClock(%d %08x)\n", a0, a1);
 					#endif
 
 					dTicks *= (uint64)36864000;
@@ -2325,7 +2732,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					uint32 seconds, usec;
 
 					#if DEBUG_HLE_IOP
-					printf("IOP: SysClock2USec(%08x %08x %08x)\n", a0, a1, a2);
+					printlog(psx, "IOP: SysClock2USec(%08x %08x %08x)\n", a0, a1, a2);
 					#endif
 
 					a0 &= 0x1fffff;
@@ -2351,7 +2758,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 	}
@@ -2362,7 +2769,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 			case 4:	// CreateEventFlag
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
 				#if DEBUG_HLE_IOP
-				printf("IOP: CreateEventFlag(%08x) (PC=%x)\n", a0, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: CreateEventFlag(%08x) (PC=%x)\n", a0, (uint32)mipsinfo.i);
 				#endif
 
 				a0 &= 0x1fffff;
@@ -2374,7 +2781,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				psx->evflags[psx->iNumFlags].inUse = 1;
 
 				#if DEBUG_HLE_IOP
-				printf("     Flag %02d: type %d init %08x param %08x\n", psx->iNumFlags, psx->evflags[psx->iNumFlags].type, psx->evflags[psx->iNumFlags].value, psx->evflags[psx->iNumFlags].param);
+				printlog(psx, "     Flag %02d: type %d init %08x param %08x\n", psx->iNumFlags, psx->evflags[psx->iNumFlags].type, psx->evflags[psx->iNumFlags].value, psx->evflags[psx->iNumFlags].param);
 				#endif
 
 				mipsinfo.i = psx->iNumFlags+1;
@@ -2385,10 +2792,28 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 			case 6: // SetEventFlag
 				a0--;
 				#if DEBUG_HLE_IOP
-				printf("IOP: SetEventFlag(%d %08x)\n", a0, a1);
+				printlog(psx, "IOP: SetEventFlag(%d %08x)\n", a0, a1);
 				#endif
 
 				psx->evflags[a0].value |= a1;
+
+				for (i = 0; i < psx->iNumThreads; i++)
+				{
+					if (psx->threads[i].iState != TS_WAITEVFLAG) continue;
+					if (psx->threads[i].waitparm == a0)
+					{
+						int success = ProcessEventFlag(psx->threads[i].waiteventmode, &psx->evflags[a0].value, psx->threads[i].waiteventmask, (psx->threads[i].waiteventresultptr != 0) ? &psx->psx_ram[psx->threads[i].waiteventresultptr / 4] : 0);
+						if (success)
+						{
+							psx->threads[i].waitparm = 0;
+							psx->threads[i].waiteventresultptr = 0;
+
+							psx->threads[i].iState = TS_RUNNING;
+
+							psx->rescheduleNeeded = 1;
+						}
+					}
+				}
 
 				mipsinfo.i = 0;
 				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
@@ -2397,28 +2822,38 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 			case 7: // iSetEventFlag
 				a0--;
 				#if DEBUG_HLE_IOP
-				printf("IOP: iSetEventFlag(%08x %08x)\n", a0, a1);
+				printlog(psx, "IOP: iSetEventFlag(%08x %08x)\n", a0, a1);
 				#endif
 
 				psx->evflags[a0].value |= a1;
 
-				mipsinfo.i = 0;
-				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
-
-				for (i=0; i < psx->iNumThreads; i++)
+				for (i = 0; i < psx->iNumThreads; i++)
 				{
-					if ((psx->threads[i].iState == TS_WAITEVFLAG) && (psx->threads[i].waitparm == a0))
+					if (psx->threads[i].iState != TS_WAITEVFLAG) continue;
+					if (psx->threads[i].waitparm == a0)
 					{
-						psx->threads[i].iState = TS_READY;
+						int success = ProcessEventFlag(psx->threads[i].waiteventmode, &psx->evflags[a0].value, psx->threads[i].waiteventmask, (psx->threads[i].waiteventresultptr != 0) ? &psx->psx_ram[psx->threads[i].waiteventresultptr / 4] : 0);
+						if (success)
+						{
+							psx->threads[i].waitparm = 0;
+							psx->threads[i].waiteventresultptr = 0;
+
+							psx->threads[i].iState = TS_RUNNING;
+
+							psx->rescheduleNeeded = 1;
+						}
 					}
 				}
+
+				mipsinfo.i = 0;
+				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			case 8:	// ClearEventFlag
 				a0--;
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
 				#if DEBUG_HLE_IOP
-				printf("IOP: ClearEventFlag(%d %08x) (PC=%x)\n", a0, a1, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: ClearEventFlag(%d %08x) (PC=%x)\n", a0, a1, (uint32)mipsinfo.i);
 				#endif
 
 				psx->evflags[a0].value &= a1;
@@ -2430,7 +2865,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 			case 9: // iClearEventFlag
 				a0--;
 				#if DEBUG_HLE_IOP
-				printf("IOP: iClearEventFlag(%d %08x)\n", a0, a1);
+				printlog(psx, "IOP: iClearEventFlag(%d %08x)\n", a0, a1);
 				#endif
 
 				psx->evflags[a0].value &= a1;
@@ -2443,40 +2878,40 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				a0--;
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printf("IOP: WaitEventFlag(%d %08x %d %08x PC=%x)\n", a0, a1, a2, a3, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: WaitEventFlag(%d %08x %d %08x PC=%x)\n", a0, a1, a2, a3, (uint32)mipsinfo.i);
 				#endif
 
-				// if we're not set, freeze this thread
-				if (!(psx->evflags[a0].value & a1))
+				a3 &= 0x1fffff;
+
+				i = ProcessEventFlag(a2, &psx->evflags[a0].value, a1, (a3 != 0) ? &psx->psx_ram[a3 / 4] : 0);
+
+				if (!i)
 				{
-					FreezeThread(psx, psx->iCurThread, 1);
 					psx->threads[psx->iCurThread].iState = TS_WAITEVFLAG;
 					psx->threads[psx->iCurThread].waitparm = a0;
-					psx->iCurThread = -1;
+					psx->threads[psx->iCurThread].waiteventmode = a2;
+					psx->threads[psx->iCurThread].waiteventmask = a1;
+					psx->threads[psx->iCurThread].waiteventresultptr = a3;
 
-					ps2_reschedule(psx);
+					psx->rescheduleNeeded = 1;
 				}
-				else
-				{
-					mipsinfo.i = 0;
-					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
-				}
+
+				mipsinfo.i = 0;
+				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 	}
 	else if (!strcmp(name, "thsemap"))
 	{
-		int foundthread;
-
 		switch (callnum)
 		{
 			case 4:	// CreateSema
 				#if DEBUG_HLE_IOP
-				printf("IOP: CreateSema(%08x)\n", a0);
+				printlog(psx, "IOP: CreateSema(%08x)\n", a0);
 				#endif
 
 				mipsinfo.i = -1;
@@ -2491,7 +2926,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 				if (mipsinfo.i == -1)
 				{
-					printf("IOP: out of semaphores!\n");
+					psx->error_ptr += sprintf(psx->error_ptr, "IOP: out of semaphores!\n");
 				}
 
 				a0 &= 0x7fffffff;
@@ -2509,35 +2944,42 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					psx->semaphores[mipsinfo.i].current = psx->semaphores[mipsinfo.i].init;
 
 					psx->semaphores[mipsinfo.i].inuse = 1;
+
+					mipsinfo.i++;
 				}
 
 				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			case 6: // SignalSema
+				a0--;
 				#if DEBUG_HLE_IOP
-				printf("IOP: SignalSema(%d) (current %d)\n", a0, psx->semaphores[a0].current);
+				printlog(psx, "IOP: SignalSema(%d) (current %d)\n", a0, psx->semaphores[a0].current);
 				#endif
 
-				foundthread = 0;
-				for (i=0; i < psx->iNumThreads; i++)
+				if (psx->semaphores[a0].threadsWaiting != 0)
 				{
-					if ((psx->threads[i].iState == TS_WAITSEMA) && (psx->threads[i].waitparm == a0))
+					for (i=0; i < psx->iNumThreads; i++)
 					{
-						psx->threads[i].iState = TS_READY;
-						psx->semaphores[a0].threadsWaiting--;
-						foundthread = 1;
-						break;
+						if ((psx->threads[i].iState == TS_WAITSEMA) && (psx->threads[i].waitparm == a0))
+						{
+							psx->threads[i].iState = TS_RUNNING;
+							psx->threads[i].waitparm = 0;
+							psx->rescheduleNeeded = 1;
+							psx->semaphores[a0].threadsWaiting--;
+							if (psx->semaphores[a0].threadsWaiting == 0)
+								break;
+						}
 					}
+
+					mipsinfo.i = 0;
 				}
-
-				mipsinfo.i = 0;
-
-				if (!foundthread)
+				else
 				{
 					if (psx->semaphores[a0].current < psx->semaphores[a0].max)
 					{
 						psx->semaphores[a0].current++;
+						mipsinfo.i = 0;
 					}
 					else
 					{
@@ -2549,29 +2991,34 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			case 7: // iSignalSema
+				a0--;
 				#if DEBUG_HLE_IOP
-				printf("IOP: iSignalSema(%d)\n", a0);
+				printlog(psx, "IOP: iSignalSema(%d)\n", a0);
 				#endif
 
-				foundthread = 0;
-				for (i=0; i < psx->iNumThreads; i++)
+				if (psx->semaphores[a0].threadsWaiting != 0)
 				{
-					if ((psx->threads[i].iState == TS_WAITSEMA) && (psx->threads[i].waitparm == a0))
+					for (i=0; i < psx->iNumThreads; i++)
 					{
-						psx->threads[i].iState = TS_READY;
-						psx->semaphores[a0].threadsWaiting--;
-						foundthread = 1;
-						break;
+						if ((psx->threads[i].iState == TS_WAITSEMA) && (psx->threads[i].waitparm == a0))
+						{
+							psx->threads[i].iState = TS_RUNNING;
+							psx->threads[i].waitparm = 0;
+							psx->rescheduleNeeded = 1;
+							psx->semaphores[a0].threadsWaiting--;
+							if (psx->semaphores[a0].threadsWaiting == 0)
+								break;
+						}
 					}
+
+					mipsinfo.i = 0;
 				}
-
-				mipsinfo.i = 0;
-
-				if (!foundthread)
+				else
 				{
 					if (psx->semaphores[a0].current < psx->semaphores[a0].max)
 					{
 						psx->semaphores[a0].current++;
+						mipsinfo.i = 0;
 					}
 					else
 					{
@@ -2583,9 +3030,10 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			case 8: // WaitSema
+				a0--;
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printf("IOP: WaitSema(%d) (cnt %d) (th %d) (PC=%x)\n", a0, psx->iCurThread, psx->semaphores[a0].current, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: WaitSema(%d) (cnt %d) (th %d) (PC=%x)\n", a0, psx->iCurThread, psx->semaphores[a0].current, (uint32)mipsinfo.i);
 				#endif
 
 				if (psx->semaphores[a0].current > 0)
@@ -2594,18 +3042,18 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				}
 				else
 				{
-					FreezeThread(psx, psx->iCurThread, 1);
 					psx->threads[psx->iCurThread].iState = TS_WAITSEMA;
 					psx->threads[psx->iCurThread].waitparm = a0;
-					ps2_reschedule(psx);
+					psx->semaphores[a0].threadsWaiting++;
+					psx->rescheduleNeeded = 1;
 				}
 
-				mipsinfo.i = 0;
+				mipsinfo.i = psx->semaphores[a0].current;
 				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 	}
@@ -2615,13 +3063,13 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 		{
 			case 4:	// AllocHardTimer
 				#if DEBUG_HLE_IOP
-				printf("IOP: AllocHardTimer(%d %d %d)\n", a0, a1, a2);
+				printlog(psx, "IOP: AllocHardTimer(%d %d %d)\n", a0, a1, a2);
 				#endif
 				// source, size, prescale
 
 				if (a1 != 32)
 				{
-					printf("IOP: AllocHardTimer doesn't support 16-bit timers!\n");
+					psx->error_ptr += sprintf(psx->error_ptr, "IOP: AllocHardTimer doesn't support 16-bit timers!\n");
 				}
 
 				psx->iop_timers[psx->iNumTimers].source = a0;
@@ -2634,7 +3082,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 6: // FreeHardTimer
 				#if DEBUG_HLE_IOP
-				printf("IOP: FreeHardTimer(%d)\n", a0);
+				printlog(psx, "IOP: FreeHardTimer(%d)\n", a0);
 				#endif
 				mipsinfo.i = 0;
 				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
@@ -2647,7 +3095,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 20: // SetTimerHandler
 				#if DEBUG_HLE_IOP
-				printf("IOP: SetTimerHandler(%d %d %08x %08x)\n", a0, a1, a2, a3);
+				printlog(psx, "IOP: SetTimerHandler(%d %d %08x %08x)\n", a0, a1, a2, a3);
 				#endif
 				// id, compare, handler, common (last is param for handler)
 
@@ -2661,7 +3109,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 22: // SetupHardTimer
 				#if DEBUG_HLE_IOP
-				printf("IOP: SetupHardTimer(%d %d %d %d)\n", a0, a1, a2, a3);
+				printlog(psx, "IOP: SetupHardTimer(%d %d %d %d)\n", a0, a1, a2, a3);
 				#endif
 				// id, source, mode, prescale
 
@@ -2675,7 +3123,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 23: // StartHardTimer
 				#if DEBUG_HLE_IOP
-				printf("IOP: StartHardTimer(%d)\n", a0);
+				printlog(psx, "IOP: StartHardTimer(%d)\n", a0);
 				#endif
 
 				psx->iop_timers[a0-1].iActive = 1;
@@ -2687,7 +3135,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 24: // StopHardTimer
 				#if DEBUG_HLE_IOP
-				printf("IOP: StopHardTimer(%d)\n", a0);
+				printlog(psx, "IOP: StopHardTimer(%d)\n", a0);
 				#endif
 
 				psx->iop_timers[a0-1].iActive = 0;
@@ -2697,7 +3145,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 	}
@@ -2710,7 +3158,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					uint8 *dst, *src;
 
 					#if DEBUG_HLE_IOP
-					printf("IOP: memcpy(%08x, %08x, %d)\n", a0, a1, a2);
+					printlog(psx, "IOP: memcpy(%08x, %08x, %d)\n", a0, a1, a2);
 					#endif
 
 					dst = (uint8 *)&psx->psx_ram[(a0&0x1fffff)/4];
@@ -2738,7 +3186,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					uint8 *dst, *src;
 
 					#if DEBUG_HLE_IOP
-					printf("IOP: memmove(%08x, %08x, %d)\n", a0, a1, a2);
+					printlog(psx, "IOP: memmove(%08x, %08x, %d)\n", a0, a1, a2);
 					#endif
 
 					dst = (uint8 *)&psx->psx_ram[(a0&0x1fffff)/4];
@@ -2770,7 +3218,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 					#if DEBUG_HLE_IOP
 					mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-					printf("IOP: memset(%08x, %02x, %d) [PC=%x]\n", a0, a1, a2, (uint32)mipsinfo.i);
+					printlog(psx, "IOP: memset(%08x, %02x, %d) [PC=%x]\n", a0, a1, a2, (uint32)mipsinfo.i);
 					#endif
 
 					dst = (uint8 *)&psx->psx_ram[(a0&0x1fffff)/4];
@@ -2785,7 +3233,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					uint8 *dst;
 
 					#if DEBUG_HLE_IOP
-					printf("IOP: bzero(%08x, %08x)\n", a0, a1);
+					printlog(psx, "IOP: bzero(%08x, %08x)\n", a0, a1);
 					#endif
 
 					dst = (uint8 *)&psx->psx_ram[(a0&0x1fffff)/4];
@@ -2802,15 +3250,63 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printf("IOP: sprintf(%08x, %s, ...) [PC=%08x]\n", a0, str1, (uint32)mipsinfo.i);
-				printf("%x %x %x %x\n", a0, a1, a2, a3);
+				printlog(psx, "IOP: sprintf(%08x, %s, ...) [PC=%08x]\n", a0, str1, (uint32)mipsinfo.i);
+				printlog(psx, "%x %x %x %x\n", a0, a1, a2, a3);
 				#endif
 
-				iop_sprintf(psx, mname, str1, CPUINFO_INT_REGISTER + MIPS_R6);	// a2 is first parameter
+				iop_sprintf(psx, mname, str1, 2);	// a2 is first parameter
 
 				#if DEBUG_HLE_IOP
-				printf("     = [%s]\n", mname);
+				printlog(psx, "     = [%s]\n", mname);
 				#endif
+				break;
+
+#if 0
+			case 21:    // strchr ??
+				{
+					uint8 *src, chr;
+
+					#if DEBUG_HLE_IOP
+					printlog(psx, "IOP: strchr(%08x, %08x)\n", a0, a1);
+					#endif
+
+					src = (uint8 *)&psx->psx_ram[(a0 & 0x1fffff) / 4];
+					src += a0 & 3;
+
+					while (*src != a1 && *src != '\0')
+					{
+						src++;
+						a0++;
+					}
+
+					if (*src == '\0')
+					{
+						a0 = 0;
+					}
+
+					// v0 = a0
+					mipsinfo.i = a0;
+					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
+				}
+				break;
+#endif
+
+			case 22:    // strcmp
+				{
+					uint8 *src0, *src1;
+
+					#if DEBUG_HLE_IOP
+					printlog(psx, "IOP: strcmp(%08x, %08x)\n", a0, a1);
+					#endif
+
+					src0 = (uint8 *)&psx->psx_ram[(a0 & 0x1fffff) / 4];
+					src1 = (uint8 *)&psx->psx_ram[(a1 & 0x1fffff) / 4];
+					src0 += a0 & 3;
+					src1 += a1 & 3;
+
+					mipsinfo.i = strcmp((const char *)src0, (const char *)src1);
+					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
+				}
 				break;
 
 			case 23:	// strcpy
@@ -2818,7 +3314,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					uint8 *dst, *src;
 
 					#if DEBUG_HLE_IOP
-					printf("IOP: strcpy(%08x, %08x)\n", a0, a1);
+					printlog(psx, "IOP: strcpy(%08x, %08x)\n", a0, a1);
 					#endif
 
 					dst = (uint8 *)&psx->psx_ram[(a0&0x1fffff)/4];
@@ -2847,7 +3343,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 					#if DEBUG_HLE_IOP
 					mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-					printf("IOP: strlen(%08x) [PC=%x]\n", a0, (uint32)mipsinfo.i);
+					printlog(psx, "IOP: strlen(%08x) [PC=%x]\n", a0, (uint32)mipsinfo.i);
 					#endif
 
 					dst = (char *)&psx->psx_ram[(a0&0x1fffff)/4];
@@ -2862,7 +3358,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					char *dst, *src;
 
 					#if DEBUG_HLE_IOP
-					printf("IOP: strncpy(%08x, %08x, %d)\n", a0, a1, a2);
+					printlog(psx, "IOP: strncpy(%08x, %08x, %d)\n", a0, a1, a2);
 					#endif
 
 					dst = (char *)&psx->psx_ram[(a0&0x1fffff)/4];
@@ -2893,7 +3389,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 				if (a1)
 				{
-					printf("IOP: Unhandled strtol with non-NULL second parm\n");
+					psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled strtol with non-NULL second parm\n");
 				}
 
 				mipsinfo.i = strtol(mname, NULL, a2);
@@ -2901,7 +3397,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 	}
@@ -2911,7 +3407,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 		{
 			case 4:	// RegisterIntrHandler
 				#if DEBUG_HLE_IOP
-				printf("IOP: RegisterIntrHandler(%d %08x %08x %08x)\n", a0, a1, a2, a3);
+				printlog(psx, "IOP: RegisterIntrHandler(%d %08x %08x %08x)\n", a0, a1, a2, a3);
 				#endif
 
 				if (a0 == 9)
@@ -2940,37 +3436,37 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 5:	// ReleaseIntrHandler
 				#if DEBUG_HLE_IOP
-				printf("IOP: ReleaseIntrHandler(%d)\n", a0);
+				printlog(psx, "IOP: ReleaseIntrHandler(%d)\n", a0);
 				#endif
 				break;
 
 			case 6:	// EnableIntr
 				#if DEBUG_HLE_IOP
-				printf("IOP: EnableIntr(%d)\n", a0);
+				printlog(psx, "IOP: EnableIntr(%d)\n", a0);
 				#endif
 				break;
 
 			case 7:	// DisableIntr
 				#if DEBUG_HLE_IOP
-				printf("IOP: DisableIntr(%d)\n", a0);
+				printlog(psx, "IOP: DisableIntr(%d)\n", a0);
 				#endif
 				break;
 
 			case 8: // CpuDisableIntr
 				#if DEBUG_HLE_IOP
-				printf("IOP: CpuDisableIntr(%d)\n", a0);
+				printlog(psx, "IOP: CpuDisableIntr(%d)\n", a0);
 				#endif
 				break;
 
 			case 9: // CpuEnableIntr
 				#if DEBUG_HLE_IOP
-				printf("IOP: CpuEnableIntr(%d)\n", a0);
+				printlog(psx, "IOP: CpuEnableIntr(%d)\n", a0);
 				#endif
 				break;
 
 			case 17:	// CpuSuspendIntr
 				#if DEBUG_HLE_IOP
-				printf("IOP: CpuSuspendIntr\n");
+				printlog(psx, "IOP: CpuSuspendIntr\n");
 				#endif
 
 				// if already suspended, return an error code
@@ -2988,7 +3484,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 18:	// CpuResumeIntr
 				#if DEBUG_HLE_IOP
-				printf("IOP: CpuResumeIntr\n");
+				printlog(psx, "IOP: CpuResumeIntr\n");
 				#endif
 				psx->intr_susp = 0;
 				mipsinfo.i = 0;
@@ -2998,14 +3494,14 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 			case 23:	// QueryIntrContext
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printf("IOP: QueryIntrContext(PC=%x)\n", (uint32)mipsinfo.i);
+				printlog(psx, "IOP: QueryIntrContext(PC=%x)\n", (uint32)mipsinfo.i);
 				#endif
 				mipsinfo.i = 0;
 				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 	}
@@ -3015,7 +3511,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 		{
 			case 5: // FlushDcache
 				#if DEBUG_HLE_IOP
-				printf("IOP: FlushDcache()\n");
+				printlog(psx, "IOP: FlushDcache()\n");
 				#endif
 				break;
 
@@ -3023,7 +3519,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				a0 &= 0x1fffff;
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printf("IOP: RegisterLibraryEntries(%08x) (PC=%x)\n", a0, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: RegisterLibraryEntries(%08x) (PC=%x)\n", a0, (uint32)mipsinfo.i);
 				#endif
 
 				if (psx->psx_ram[a0/4] == LE32(0x41c00000))
@@ -3032,7 +3528,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					memcpy(&psx->reglibs[psx->iNumLibs].name, &psx->psx_ram[a0/4], 8);
 					psx->reglibs[psx->iNumLibs].name[8] = '\0';
 					#if DEBUG_HLE_IOP
-					printf("Lib name [%s]\n", psx->reglibs[psx->iNumLibs].name);
+					printlog(psx, "Lib name [%s]\n", psx->reglibs[psx->iNumLibs].name);
 					#endif
 					a0 += 2*4;
 					psx->reglibs[psx->iNumLibs].dispatch = a0;
@@ -3040,8 +3536,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				}
 				else
 				{
-					printf("ERROR: Entry table signature missing\n");
-
+					psx->error_ptr += sprintf(psx->error_ptr, "ERROR: Entry table signature missing\n");
 				}
 
 				mipsinfo.i = 0;
@@ -3049,7 +3544,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 	}
@@ -3076,14 +3571,14 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 				if (a1 == 1114112)	// HACK for crappy code in Shadow Hearts rip that assumes the buffer address
 				{
-					printf("SH Hack: was %x now %x\n", newAlloc, 0x60000);
+					psx->error_ptr += sprintf(psx->error_ptr, "SH Hack: was %x now %x\n", newAlloc, 0x60000);
 					newAlloc = 0x60000;
 				}
 
 				psf2_set_loadaddr(psx, newAlloc + a1);
 
 				#if DEBUG_HLE_IOP
-				printf("IOP: AllocMemory(%d, %d, %x) = %08x\n", a0, a1, a2, newAlloc|0x80000000);
+				printlog(psx, "IOP: AllocMemory(%d, %d, %x) = %08x\n", a0, a1, a2, newAlloc|0x80000000);
 				#endif
 
 				mipsinfo.i = newAlloc; // | 0x80000000;
@@ -3092,13 +3587,13 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 5:	// FreeMemory
 				#if DEBUG_HLE_IOP
-				printf("IOP: FreeMemory(%x)\n", a0);
+				printlog(psx, "IOP: FreeMemory(%x)\n", a0);
 				#endif
 				break;
 
 			case 7:	// QueryMaxFreeMemSize
 				#if DEBUG_HLE_IOP
-				printf("IOP: QueryMaxFreeMemSize\n");
+				printlog(psx, "IOP: QueryMaxFreeMemSize\n");
 				#endif
 
 				mipsinfo.i = (2*1024*1024) - psf2_get_loadaddr(psx);
@@ -3107,7 +3602,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 8:	// QueryTotalFreeMemSize
 				#if DEBUG_HLE_IOP
-				printf("IOP: QueryTotalFreeMemSize\n");
+				printlog(psx, "IOP: QueryTotalFreeMemSize\n");
 				#endif
 
 				mipsinfo.i = (2*1024*1024) - psf2_get_loadaddr(psx);
@@ -3119,7 +3614,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				mname += a0 & 0x1fffff;
 				mname += (a0 & 3);
 
-				iop_sprintf(psx, out, mname, CPUINFO_INT_REGISTER + MIPS_R5);	// a1 is first parm
+				iop_sprintf(psx, out, mname, 1);	// a1 is first parm
 
 				if (out[strlen(out)-1] != '\n')
 				{
@@ -3141,8 +3636,13 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printf("KTTY: %s [PC=%x]\n", out, (uint32)mipsinfo.i);
+				printlog(psx, "KTTY: %s [PC=%x]\n", out, (uint32)mipsinfo.i);
 				#endif
+
+				if (psx->console_callback)
+				{
+					psx->console_callback(psx->console_context, out);
+				}
 
 				#if 0
 				{
@@ -3155,7 +3655,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 	}
@@ -3171,7 +3671,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				mname += 8;
 				str1 = (char *)&psx->psx_ram[(a2 & 0x1fffff)/4];
 				#if DEBUG_HLE_IOP
-				printf("LoadStartModule: %s\n", mname);
+				printlog(psx, "LoadStartModule: %s\n", mname);
 				#endif
 
 				// get 2k for our parameters
@@ -3225,7 +3725,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 						for (i = 0; i < numargs; i++)
 						{
 							#if DEBUG_HLE_IOP
-//							printf("Arg %d: %08x [%s]\n", i, args[i], &argbase[args[i]-a2]);
+//							printlog(psx, "Arg %d: %08x [%s]\n", i, args[i], &argbase[args[i]-a2]);
 							#endif
 							psx->psx_ram[(newAlloc/4)+i] = LE32(args[i]);
 						}
@@ -3246,7 +3746,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
 		}
 
@@ -3271,8 +3771,8 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 					if (slot2use == -1)
 					{
-						printf("IOP: out of file slots!\n");
-						mipsinfo.i = 0xffffffff;
+						psx->error_ptr += sprintf(psx->error_ptr, "IOP: out of file slots!\n");
+						mipsinfo.i = 0;
 						mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 						return;
 					}
@@ -3295,7 +3795,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 					mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
 					#if DEBUG_HLE_IOP
-					printf("IOP: open(\"%s\") (PC=%08x)\n", mname, (uint32)mipsinfo.i);
+					printlog(psx, "IOP: open(\"%s\") (PC=%08x)\n", mname, (uint32)mipsinfo.i);
 					#endif
                     
                     psx->filename[slot2use] = malloc(strlen(mname)+1);
@@ -3310,20 +3810,21 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
                     if (psx->filesize[slot2use] >= 0x80000000)
                     {
-                        mipsinfo.i = 0xffffffff;
+                        mipsinfo.i = 0;
                     }
                     else
                     {
-                        mipsinfo.i = slot2use;
+                        mipsinfo.i = slot2use + 1;
                     }
 				}
 				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
 			case 5:	// close
+				a0--;
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printf("IOP: close(%d) (PC=%08x)\n", a0, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: close(%d) (PC=%08x)\n", a0, (uint32)mipsinfo.i);
 				#endif
 				free(psx->filename[a0]);
 				psx->filename[a0] = (uint8 *)NULL;
@@ -3332,10 +3833,13 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			case 6: { // read
-#if DEBUG_HLE_IOP
-				printf("IOP: read(%x %x %d) [pos %d size %d]\n", a0, a1, a2, psx->filepos[a0], psx->filesize[a0]);
-#endif
 				uint8 *rp;
+
+				a0--;
+
+				#if DEBUG_HLE_IOP
+				printlog(psx, "IOP: read(%x %x %d) [pos %d size %d]\n", a0, a1, a2, psx->filepos[a0], psx->filesize[a0]);
+				#endif
 
 				if (psx->filepos[a0] + a2 > psx->filesize[a0])
 					a2 = psx->filesize[a0] - psx->filepos[a0];
@@ -3355,9 +3859,10 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 			}
 			case 8:	// lseek
+				a0--;
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printf("IOP: lseek(%d, %d, %s) (PC=%08x)\n", a0, a1, seek_types[a2], (uint32)mipsinfo.i);
+				printlog(psx, "IOP: lseek(%d, %d, %s) (PC=%08x)\n", a0, a1, seek_types[a2], (uint32)mipsinfo.i);
 				#endif
 
 				switch (a2)
@@ -3385,7 +3890,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 20:	// AddDrv
 				#if DEBUG_HLE_IOP
-				printf("IOP: AddDrv(%x)\n", a0);
+				printlog(psx, "IOP: AddDrv(%x)\n", a0);
 				#endif
 
 				mipsinfo.i = 0;
@@ -3394,7 +3899,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 21:	// DelDrv
 				#if DEBUG_HLE_IOP
-				printf("IOP: DelDrv(%x)\n", a0);
+				printlog(psx, "IOP: DelDrv(%x)\n", a0);
 				#endif
 
 				mipsinfo.i = 0;
@@ -3402,7 +3907,24 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				break;
 
 			default:
-				printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
+		}
+	}
+	else if (!strcmp(name, "vblank"))
+	{
+		switch (callnum)
+		{
+			case 5:    // WaitVblankEnd
+				if (psx->iCurThread >= 0)
+				{
+					psx->threads[psx->iCurThread].iState = TS_WAITDELAY;
+					psx->threads[psx->iCurThread].waitparm = 768 * psx->vblank_samples_until_next;
+					psx->rescheduleNeeded = 1;
+				}
+				break;
+
+			default:
+				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 		}
 	}
 	else
@@ -3431,7 +3953,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 					// (NOTE: we get called in the delay slot!)
 					#if DEBUG_HLE_IOP
-					printf("IOP: Calling %s (%d) service %d => %08x (parms %08x %08x %08x %08x) (PC=%x)\n",
+					printlog(psx, "IOP: Calling %s (%d) service %d => %08x (parms %08x %08x %08x %08x) (PC=%x)\n",
 							 psx->reglibs[lib].name,
 							 lib,
 							 callnum,
@@ -3457,7 +3979,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 			}
 		}
 
-		printf("IOP: Unhandled service %d for module %s\n", callnum, name);
+		psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 	}
 }
 

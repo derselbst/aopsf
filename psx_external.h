@@ -45,6 +45,11 @@ extern uint32 psx_get_state_size(uint32 version);
 
 extern void   psx_set_refresh(PSX_STATE *psx, uint32 refresh);
 
+extern const char * psx_get_last_error(PSX_STATE *psx);
+
+typedef void(*psx_console_callback_t)(void * context, const char * message);
+extern void   psx_register_console_callback(PSX_STATE *psx, psx_console_callback_t callback, void * context);
+
 extern uint32 psf_load_section(PSX_STATE *psx, const uint8 *buffer, uint32 length, uint32 first);
 extern int32  psf_start(PSX_STATE *psx);
 extern int32  psf_gen(PSX_STATE *psx, int16 *buffer, uint32 samples);

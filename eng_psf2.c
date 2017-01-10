@@ -349,6 +349,9 @@ int32 psf2_start(PSX_STATE *psx)
 	uint8 *buf;
 	union cpuinfo mipsinfo;
     
+	psx->error_ptr = psx->error_buffer;
+	psx->error_buffer[0] = '\0';
+
 #if DEBUG_DISASM
     psx->mipscpu.file = fopen("/tmp/moo.txt", "w");
 #endif
@@ -372,6 +375,7 @@ int32 psf2_start(PSX_STATE *psx)
 
 	if (psx->initialPC == 0xffffffff)
 	{
+		psx->error_ptr += sprintf(psx->error_ptr, "Invalid psf2.irx.\n");
 		return AO_FAIL;
 	}
 
@@ -405,7 +409,7 @@ int32 psf2_start(PSX_STATE *psx)
 	// back up initial RAM image to quickly restart songs
 	memcpy(psx->initial_ram, psx->psx_ram, 2*1024*1024);
 
-	psx_hw_init(psx);
+	psx_hw_init(psx, 2);
 	spu_clear_state(SPUSTATE, 2);
 
 	return AO_SUCCESS;
@@ -415,22 +419,30 @@ int32 psf2_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
 {
 	int i;
 
-    const int samples_per_frame = 800;
+	const int samples_per_frame = psx->psf_refresh == 50 ? 960 : 800;
 
     int samples_into_frame = psx->samples_into_frame;
     
-    spu_set_buffer(SPUSTATE, buffer, samples);
+	psx->error_ptr = psx->error_buffer;
+	psx->error_buffer[0] = '\0';
+
+	spu_set_buffer(SPUSTATE, buffer, samples);
     
     while (samples)
     {
         int samples_to_do = samples_per_frame - samples_into_frame;
+		int samples_until_vblank = samples_to_do;
         if (samples_to_do > samples)
             samples_to_do = samples;
-        
+
+		psx->vblank_samples_until_next = samples_until_vblank;
+
         for (i = 0; i < samples_to_do; i++)
         {
             spu_advance(SPUSTATE, 1);
             ps2_hw_slice(psx);
+			if (--psx->vblank_samples_until_next == 0)
+				psx->vblank_samples_until_next = samples_per_frame;
         }
         
         samples_into_frame += samples_to_do;
@@ -455,7 +467,10 @@ int32 psf2_stop(PSX_STATE *psx)
 {
 	int i;
 
-    for (i = 0; i < MAX_FILE_SLOTS; i++)
+	psx->error_ptr = psx->error_buffer;
+	psx->error_buffer[0] = '\0';
+
+	for (i = 0; i < MAX_FILE_SLOTS; i++)
     {
         if (psx->filestat[i])
         {
@@ -476,6 +491,9 @@ int32 psf2_command(PSX_STATE *psx, int32 command, int32 parameter)
 {
 	union cpuinfo mipsinfo;
 
+	psx->error_ptr = psx->error_buffer;
+	psx->error_buffer[0] = '\0';
+
 	switch (command)
 	{
 		case COMMAND_RESTART:
@@ -484,7 +502,7 @@ int32 psf2_command(PSX_STATE *psx, int32 command, int32 parameter)
 
 			mips_init(&psx->mipscpu);
 			mips_reset(&psx->mipscpu, NULL);
-			psx_hw_init(psx);
+			psx_hw_init(psx, 2);
 			spu_clear_state(SPUSTATE, 2);
 
 			mipsinfo.i = psx->initialPC;
@@ -505,7 +523,7 @@ int32 psf2_command(PSX_STATE *psx, int32 command, int32 parameter)
 			mipsinfo.i = 0x80000004;	// argv
 			mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R5, &mipsinfo);
 
-			psx_hw_init(psx);
+			psx_hw_init(psx, 2);
 
 			return AO_SUCCESS;
 

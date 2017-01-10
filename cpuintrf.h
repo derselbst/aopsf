@@ -556,7 +556,7 @@ typedef struct {
 #define cpu_writemem16		memory_write
 #define cpu_readop			memory_readop
 #define cpu_readop_arg		memory_read
-#define logerror(x, ...)
+//#define logerror(x, ...)
 #define change_pc16(x)
 #define CALL_MAME_DEBUG
 
