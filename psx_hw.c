@@ -3744,7 +3744,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				}
 				psf2_set_loadaddr(psx, newAlloc + 2048);
 
-				tempmem = (uint8 *)malloc(2*1024*1024);
+				tempmem = (uint8*) psx->elf_scratch;
 				if (psf2_load_file(psx, mname, tempmem, 2*1024*1024) != 0xffffffff)
 				{
 					uint32 start;
@@ -3802,7 +3802,6 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 						mips_set_info(&psx->mipscpu, CPUINFO_INT_PC, &mipsinfo);
 					}
 				}
-				free(tempmem);
 				break;
 
 			default:

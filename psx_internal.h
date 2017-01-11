@@ -252,6 +252,9 @@ struct psx_state
 
   uint32 initial_ram[(2*1024*1024)/4];
 
+  // spare the PSF2 elf loader from using malloc
+  uint32 elf_scratch[(2*1024*1024)/4];
+
   uint32 scratch[0x400 / 4];
 
   uint32 initialPC, initialSP;
