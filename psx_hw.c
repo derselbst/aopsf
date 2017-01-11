@@ -63,7 +63,7 @@ static char *_ThreadStateNames[TS_MAXSTATE] = { "RUNNING", "DORMANT", "WAITEVFLA
 static char *seek_types[3] = { "SEEK_SET", "SEEK_CUR", "SEEK_END" };
 #endif
 
-#if DEBUG_HLE_IOP
+#if DEBUG_HLE_IOP || DEBUG_HLE_BIOS || DEBUG_THREADING || DEBUG_UNK_RW
 void printlog(PSX_STATE *psx, const char *fmt, ...)
 {
 	if (psx->console_callback)
@@ -289,6 +289,12 @@ uint32 psx_hw_read(PSX_STATE *psx, offs_t offset, uint32 mem_mask)
 		return LE32(psx->psx_ram[offset>>2]);
 	}
 
+	if (offset >= 0x1f800000 && offset <= 0x1f800fff)
+	{
+		offset &= 0x3ff;
+		return LE32(psx->scratch[offset >> 2]);
+	}
+
 	if (offset == 0xbfc00180 || offset == 0xbfc00184)	// exception vector
 	{
 		return FUNCT_HLECALL;
@@ -392,7 +398,7 @@ uint32 psx_hw_read(PSX_STATE *psx, offs_t offset, uint32 mem_mask)
 		union cpuinfo mipsinfo;
 
 		mips_get_info(&psx->mipscpu, CPUINFO_INT_PC, &mipsinfo);
-		printf("Unknown read: %08x, mask %08x (PC=%x)\n", offset&~3, mem_mask, mipsinfo.i);
+		printlog(psx, "Unknown read: %08x, mask %08x (PC=%x)\n", offset&~3, mem_mask, mipsinfo.i);
 	}
 	#endif
 	return 0;
@@ -804,6 +810,14 @@ void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
 		return;
 	}
 
+	if (offset >= 0x1f800000 && offset <= 0x1f800fff)
+	{
+		offset &= 0x3ff;
+		psx->scratch[offset >> 2] &= LE32(mem_mask);
+		psx->scratch[offset >> 2] |= LE32(data);
+		return;
+	}
+
 	if (offset == 0x1f801014 || offset == 0xbf801014)
 	{
 		psx->spu_delay &= mem_mask;
@@ -966,7 +980,7 @@ void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
 		union cpuinfo mipsinfo;
 
 		mips_get_info(&psx->mipscpu, CPUINFO_INT_PC, &mipsinfo);
-		printf("Unknown write: %08x to %08x, mask %08x (PC=%x)\n", data, offset&~3, mem_mask, mipsinfo.i);
+		printlog(psx, "Unknown write: %08x to %08x, mask %08x (PC=%x)\n", data, offset&~3, mem_mask, mipsinfo.i);
 	}
 	#endif
 }
@@ -987,15 +1001,28 @@ void psx_hw_slice(PSX_STATE *psx)
 		psx->dma_timer--;
 		if (psx->dma_timer == 0)
         {
+			if (psx->eventsAllocated)
+			{
+				const int eventToCheck = 0xf0000009;
+				int i;
+				for (i = 0; i < MAX_EVENT; i++)
+				{
+					if (!psx->Event[i].isValid) continue;
+					if (psx->Event[i].classId != eventToCheck) continue;
+					if (!psx->Event[i].enabled) continue;
+
+					psx->Event[i].fired = 1;
+
+					if (!psx->Event[i].func) continue;
+
+					call_irq_routine(psx, psx->Event[i].func, 0);
+				}
+			}
             if (psx->dma_icr & (1 << (16+4)))
             {
                 spu_interrupt_dma4(SPUSTATE);
                 psx->dma_icr |= (1 << (24+4));
                 psx_irq_set(psx, 0x0008);
-            }
-            else if (psx->Event[9][5].status == LE32(EvStACTIVE))
-            {
-                psx->Event[9][5].status = LE32(EvStALREADY);
             }
         }
 	}
@@ -1039,6 +1066,15 @@ void ps2_hw_frame(PSX_STATE *psx)
 }
 
 // BIOS HLE
+#define LONGJMP_BUFFER				(0x0200)
+#define EVENTS_BEGIN				(0x3000)
+#define EVENTS_SIZE					(sizeof(EvtCtrlBlk) * MAX_EVENT)
+#define B0TABLE_BEGIN				(EVENTS_BEGIN + EVENTS_SIZE)
+#define B0TABLE_SIZE				(0x5D * 4)
+#define C0TABLE_BEGIN				(B0TABLE_BEGIN + B0TABLE_SIZE)
+#define C0TABLE_SIZE				(0x1C * 4)
+#define C0_EXCEPTIONHANDLER_BEGIN	(C0TABLE_BEGIN + C0TABLE_SIZE)
+#define C0_EXCEPTIONHANDLER_SIZE	(0x1000)
 
 // heap block struct offsets
 static void call_irq_routine(PSX_STATE *psx, uint32 routine, uint32 parameter)
@@ -1147,20 +1183,30 @@ void psx_bios_exception(PSX_STATE *psx, uint32 pc)
 			psx->irq_regs[33] = mipsinfo.i;
 
 			// check BIOS-driven interrupts
-			if (psx->irq_data & 1)	// VSync
+			if (psx->irq_data & 0x70)	// root counters
 			{
-				if (psx->CounterEvent[3][1].status == LE32(EvStACTIVE))
+				const int eventToCheck = 0xF2000002;
+				int needClearInt = 0;
+
+				for (i = 0; i < MAX_EVENT; i++)
 				{
-					// run the handler
-					mipsinfo.i = LE32(psx->CounterEvent[3][1].fhandler);
-//	       				printf("Cause = %x, ePC = %x\n", mips_get_cause(), mips_get_ePC());
-//	       				printf("VBL running handler @ %x\n", mipsinfo.i);
+					if (!psx->Event[i].isValid) continue;
+					if (psx->Event[i].classId != eventToCheck) continue;
+
+					needClearInt = 1;
+
+					if (!psx->Event[i].enabled) continue;
+
+					psx->Event[i].fired = 1;
+
+					if (!psx->Event[i].func) continue;
+
+					mipsinfo.i = LE32(psx->Event[i].func);
 					mips_set_info(&psx->mipscpu, CPUINFO_INT_PC, &mipsinfo);
 					mipsinfo.i = 0x80001000;
 					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
 
-					// make sure we're set
-					psx->psx_ram[0x1000/4] = LE32(FUNCT_HLECALL);
+					psx->psx_ram[0x1000 / 4] = LE32(FUNCT_HLECALL);
 
 					psx->softcall_target = 0;
 					oldICount = mips_get_icount(&psx->mipscpu);
@@ -1169,55 +1215,19 @@ void psx_bios_exception(PSX_STATE *psx, uint32 pc)
 						mips_execute(&psx->mipscpu, 10);
 					}
 					mips_set_icount(&psx->mipscpu, oldICount);
-
-//	       				printf("Exiting softcall handler\n");
-
-					psx->irq_data &= ~1;		// clear the VBL IRQ if we handled it
 				}
-			}
-			else if (psx->irq_data & 0x70)	// root counters
-			{
-				for (i = 0; i < 3; i++)
+
+				if (needClearInt)
 				{
-					if (psx->irq_data & (1 << (i+4)))
-					{
-						if (psx->CounterEvent[i][1].status == LE32(EvStACTIVE))
-						{
-							// run the handler
-							mipsinfo.i = LE32(psx->CounterEvent[i][1].fhandler);
-//							printf("Cause = %x, ePC = %x\n", mips_get_cause(), mips_get_ePC());
-//							printf("Counter %d running handler @ %x\n", i, mipsinfo.i);
-							mips_set_info(&psx->mipscpu, CPUINFO_INT_PC, &mipsinfo);
-							mipsinfo.i = 0x80001000;
-							mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-
-							// make sure we're set
-							psx->psx_ram[0x1000/4] = LE32(FUNCT_HLECALL);
-
-							psx->softcall_target = 0;
-							oldICount = mips_get_icount(&psx->mipscpu);
-							while (!psx->softcall_target)
-							{
-								mips_execute(&psx->mipscpu, 10);
-							}
-							mips_set_icount(&psx->mipscpu, oldICount);
-
-//							printf("Exiting softcall handler\n");
-							psx->irq_data &= ~(1 << (i+4));
-						}
-						else
-						{
-//							printf("CEvt %d not active\n", i);
-						}
-					}
+					psx->irq_data &= ~0x70;
 				}
 			}
 
-			if (psx->entry_int)
+			if (psx->psx_ram[LONGJMP_BUFFER/4])
 			{
 				psx_hw_write(psx, 0x1f801070, 0xffffffff, 0);
 
-				a0 = psx->entry_int;
+				a0 = LE32(psx->psx_ram[LONGJMP_BUFFER/4]);
 
 //				printf("taking entry_int\n");
 
@@ -1279,21 +1289,21 @@ void psx_bios_exception(PSX_STATE *psx, uint32 pc)
 			{
 				case 1: // EnterCritical
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: EnterCritical\n");
+					printlog(psx, "HLEBIOS: EnterCritical\n");
 					#endif
 					status &= ~0x0404;
 					break;
 
 				case 2:	// ExitCritical
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: ExitCritical\n");
+					printlog(psx, "HLEBIOS: ExitCritical\n");
 					#endif
 					status |= 0x0404;
 					break;
 
 				default:
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: Unknown syscall %x\n", a0);
+					printlog(psx, "HLEBIOS: Unknown syscall %x\n", a0);
 					#endif
 					break;
 			}
@@ -1309,7 +1319,7 @@ void psx_bios_exception(PSX_STATE *psx, uint32 pc)
 
 		default:
 			#if DEBUG_HLE_BIOS
-			printf("HLEBIOS: Unknown exception %x\n", mips_get_cause(&psx->mipscpu));
+			printlog(psx, "HLEBIOS: Unknown exception %x\n", mips_get_cause(&psx->mipscpu));
 			#endif
 			break;
 	}
@@ -1318,49 +1328,6 @@ void psx_bios_exception(PSX_STATE *psx, uint32 pc)
 	{
 		ps2_reschedule(psx);
 	}
-}
-
-static uint32 calc_ev(uint32 a0)
-{
-	uint32 ev;
-
-	ev = (a0 >> 24) & 0xf;
-	if (ev == 0xf)
-	{
-		ev = 0x5;
-	}
-	ev *= 32;
-	ev += (a0 & 0x1f);
-
-	return ev;
-}
-
-static uint32 calc_spec(uint32 a1)
-{
-	uint32 spec = 0;
-	int i;
-
-	if (a1 == 0x301)
-	{
-		spec = 16;
-	}
-	else if (a1 == 0x302)
-	{
-		spec = 17;
-	}
-	else
-	{
-		for (i = 0; i < 16; i++)
-		{
-			if (a1 & (1<<i))
-			{
-				spec = i;
-				break;
-			}
-		}
-	}
-
-	return spec;
 }
 
 uint32 psx_get_state_size(uint32 version)
@@ -1420,8 +1387,24 @@ void psx_hw_init(PSX_STATE *psx, uint32 version)
 	psx->psx_ram[0xb0/4] = LE32(FUNCT_HLECALL);
 	psx->psx_ram[0xc0/4] = LE32(FUNCT_HLECALL);
 
-	psx->Event = (EvtCtrlBlk *)&psx->psx_ram[0x1000/4];
-	psx->CounterEvent = (psx->Event + (32*2));
+	//Setup B0 table
+	{
+		uint32* table = (uint32*)(&psx->psx_ram[B0TABLE_BEGIN/4]);
+		table[0x5B] = LE32(C0_EXCEPTIONHANDLER_BEGIN);
+	}
+
+	//Setup C0 table
+	{
+		uint32* table = (uint32*)(&psx->psx_ram[C0TABLE_BEGIN/4]);
+		table[0x06] = LE32(C0_EXCEPTIONHANDLER_BEGIN);
+	}
+
+	psx->psx_ram[LONGJMP_BUFFER / 4] = 0;
+
+	psx->eventsAllocated = 0;
+
+	psx->Event = (EvtCtrlBlk *)&psx->psx_ram[EVENTS_BEGIN/4];
+	memset(psx->Event, 0, sizeof(EvtCtrlBlk) * MAX_EVENT);
 
     psx->dma_pcr = 0;
 	psx->dma_icr = 0;
@@ -1433,13 +1416,14 @@ void psx_hw_init(PSX_STATE *psx, uint32 version)
 	psx->dma4_madr = psx->dma4_bcr = psx->dma4_chcr = 0;
     psx->dma7_madr = psx->dma7_bcr = psx->dma7_chcr = 0;
 	psx->heap_addr = 0;
-	psx->entry_int = 0;
 
 	psx->WAI = 0;
     
     psx->stop = 0;
 
 	psx->rescheduleNeeded = 0;
+
+	memset(&psx->scratch, 0, sizeof(psx->scratch));
 
 	if (psx->psf_refresh != 50 && psx->psf_refresh != 60)
 		psx->psf_refresh = 60;
@@ -1518,7 +1502,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 					mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
 					psx->psx_ram[((a0&0x1fffff)+0)/4] = LE32(mipsinfo.i);
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: setjmp(%08x) => PC %08x\n", a0, mipsinfo.i);
+					printlog(psx, "HLEBIOS: setjmp(%08x) => PC %08x\n", a0, mipsinfo.i);
 					#endif
 					// SP
 					mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R29, &mipsinfo);
@@ -1543,12 +1527,42 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 					break;
 
+				case 0x14: // longjmp
+					// RA
+					mipsinfo.i = LE32(psx->psx_ram[((a0 & 0x1fffff) + 0) / 4]);
+					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
+					#if DEBUG_HLE_BIOS
+					printlog(psx, "HLEBIOS: longjmp(%08x %d) => PC %08x\n", a0, a1, mipsinfo.i);
+					#endif
+					// SP
+					mipsinfo.i = LE32(psx->psx_ram[((a0 & 0x1fffff) + 4) / 4]);
+					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R29, &mipsinfo);
+					// FP
+					mipsinfo.i = LE32(psx->psx_ram[((a0 & 0x1fffff) + 8) / 4]);
+					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R30, &mipsinfo);
+
+					// S0-S7 are next
+					for (i = 0; i < 8; i++)
+					{
+						mipsinfo.i = LE32(psx->psx_ram[((a0 & 0x1fffff) + 12 + (i * 4)) / 4]);
+						mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R16 + i, &mipsinfo);
+					}
+
+					// GP
+					mipsinfo.i = LE32(psx->psx_ram[((a0 & 0x1fffff) + 44) / 4]);
+					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R28, &mipsinfo);
+
+					// v0 = a1
+					mipsinfo.i = a1;
+					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
+					break;
+
 				case 0x18:	// strncmp
 					{
 						uint8 *dst, *src;
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: strncmp(%08x, %08x, %d)\n", a0, a1, a2);
+						printlog(psx, "HLEBIOS: strncmp(%08x, %08x, %d)\n", a0, a1, a2);
 						#endif
 
 						dst = (uint8 *)psx->psx_ram;
@@ -1567,7 +1581,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 						uint8 *dst, *src;
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: strcpy(%08x, %08x)\n", a0, a1);
+						printlog(psx, "HLEBIOS: strcpy(%08x, %08x)\n", a0, a1);
 						#endif
 
 						dst = (uint8 *)psx->psx_ram;
@@ -1593,7 +1607,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 						uint8 *dst;
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: bzero(%08x, %08x)\n", a0, a1);
+						printlog(psx, "HLEBIOS: bzero(%08x, %08x)\n", a0, a1);
 						#endif
 
 						dst = (uint8 *)psx->psx_ram;
@@ -1607,7 +1621,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 						uint8 *dst, *src;
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: memcpy(%08x, %08x, %08x)\n", a0, a1, a2);
+						printlog(psx, "HLEBIOS: memcpy(%08x, %08x, %08x)\n", a0, a1, a2);
 						#endif
 
 						dst = (uint8 *)psx->psx_ram;
@@ -1634,7 +1648,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 						uint8 *dst;
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: memset(%08x, %08x, %08x)\n", a0, a1, a2);
+						printlog(psx, "HLEBIOS: memset(%08x, %08x, %08x)\n", a0, a1, a2);
 						#endif
 
 						dst = (uint8 *)psx->psx_ram;
@@ -1655,7 +1669,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x2f:	// rand
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: rand\n");
+					printlog(psx, "HLEBIOS: rand\n");
 					#endif
 
 					// v0 = result
@@ -1665,7 +1679,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x30:	// srand
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: srand(%x)\n", a0);
+					printlog(psx, "HLEBIOS: srand(%x)\n", a0);
 					#endif
 					srand(a0);
 					break;
@@ -1682,7 +1696,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 						}
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: malloc(%x) -- rounding up to %x\n", a0, size);
+						printlog(psx, "HLEBIOS: malloc(%x) -- rounding up to %x\n", a0, size);
 						#endif
 
 						chunk = psx->heap_addr;
@@ -1708,7 +1722,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 						mipsinfo.i = chunk + 16;
 						mipsinfo.i |= 0x80000000;
 						#if DEBUG_HLE_BIOS
-						printf("== %08x\n", mipsinfo.i);
+						printlog(psx, "== %08x\n", mipsinfo.i);
 						#endif
 						mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 					}
@@ -1719,7 +1733,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 						uint32 chunk, size, fd, lastfd;
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: free(%08x)\n", a0);
+						printlog(psx, "HLEBIOS: free(%08x)\n", a0);
 						#endif
 
 						chunk = (a0 & 0x1fffff) - 16;
@@ -1760,7 +1774,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 				case 0x39:	// InitHeap
 					// heap address in A0, length in A1
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: InitHeap(%08x, %08x)\n", a0, a1);
+					printlog(psx, "HLEBIOS: InitHeap(%08x, %08x)\n", a0, a1);
 					#endif
 
 					// align block, subtracting overflow from requested size
@@ -1800,19 +1814,31 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x3f:	// printf
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: printf(%08x) = %s\n", a0, &psx->psx_ram[(a0&0x1fffff)/4]);
+					printlog(psx, "HLEBIOS: printf(%08x) = %s\n", a0, &psx->psx_ram[(a0&0x1fffff)/4]);
+					#endif
+					break;
+
+				case 0x44: // FlushCache
+					#if DEBUG_HLE_BIOS
+					printlog(psx, "HLEBIOS: FlushCache\n");
+					#endif
+					break;
+
+				case 0x70: // bu_init
+					#if DEBUG_HLE_BIOS
+					printlog(psx, "HLEBIOS: bu_init\n");
 					#endif
 					break;
 
 				case 0x72:	//__96_remove
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: __96_remove\n");
+					printlog(psx, "HLEBIOS: __96_remove\n");
 					#endif
 					break;
 
 				default:
 					#if DEBUG_HLE_BIOS
-					printf("Unknown BIOS A0 call = %x\n", subcall);
+					printlog(psx, "Unknown BIOS A0 call = %x\n", subcall);
 					#endif
 					break;
 			}
@@ -1823,110 +1849,117 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 			{
 				case 0x07:	// DeliverEvent
 					{
-						int ev, spec;
-
-
-						ev = calc_ev(a0);
-						spec = calc_spec(a1);
+						uint32 classId = a0;
+						uint32 spec = a1;
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: DeliverEvent(ev %d, spec %d)\n", ev, spec);
+						printlog(psx, "HLEBIOS: DeliverEvent(%08x %08x)\n", classId, spec);
 						#endif
 
-						if (psx->Event[ev][spec].status != LE32(EvStACTIVE))
+						if (psx->eventsAllocated)
 						{
-							#if DEBUG_HLE_BIOS
-							printf("event not active\n");
-							#endif
-							break;
-						}
+							for (i = 0; i < MAX_EVENT; i++)
+							{
+								if (!psx->Event[i].isValid) continue;
+								if (psx->Event[i].classId != classId) continue;
+								if (!psx->Event[i].enabled) continue;
 
-						// if interrupt mode, do the call
-						if (psx->Event[ev][spec].mode == LE32(EvMdINTR))
-						{
-							#if DEBUG_HLE_BIOS
-							printf("INTR type, need to call handler %x\n", LE32(psx->Event[ev][spec].fhandler));
-							#endif
-						}
-						else
-						{
-							psx->Event[ev][spec].status = LE32(EvStALREADY);
+								psx->Event[i].fired = 1;
+
+								if (!psx->Event[i].func) continue;
+
+								call_irq_routine(psx, psx->Event[i].func, 0);
+							}
 						}
 					}
 					break;
 
 				case 0x08:	// OpenEvent
 					{
-						int ev, spec;
-
-						ev = calc_ev(a0);
-						spec = calc_spec(a1);
+						uint32 eventId = -1;
+						uint32 classId = a0;
+						uint32 spec = a1;
+						uint32 mode = a2;
+						uint32 func = a3;
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: OpenEvent(%08x, %08x, %08x, %08x) = ev %d spec %d\n", a0, a1, a2, a3, ev, spec);
-						if (ev >= 64 && ev <= 67)
-						{
-							printf("HLEBIOS: event %d maps to root counter %d\n", ev, ev-64);
-						}
+						printlog(psx, "HLEBIOS: OpenEvent(%08x, %08x, %08x, %08x)\n", a0, a1, a2, a3);
 						#endif
 
-						psx->Event[ev][spec].status = LE32(EvStWAIT);
-						psx->Event[ev][spec].mode = LE32(a2);
-						psx->Event[ev][spec].fhandler = LE32(a3);
+						if (psx->eventsAllocated == MAX_EVENT)
+						{
+							#if DEBUG_HLE_BIOS
+							printlog(psx, "HLEBIOS: Too many events allocated!\n");
+							#endif
+							return;
+						}
+
+						psx->eventsAllocated++;
+
+						for (i = 0; i < MAX_EVENT; i++)
+						{
+							if (psx->Event[i].isValid == 0)
+							{
+								eventId = i;
+								break;
+							}
+						}
+
+						psx->Event[eventId].isValid = 1;
+						psx->Event[eventId].classId = classId;
+						psx->Event[eventId].spec = spec;
+						psx->Event[eventId].mode = mode;
+						psx->Event[eventId].func = func;
+						psx->Event[eventId].fired = 0;
 
 						// v0 = ev | spec<<8;
-						mipsinfo.i = ev | (spec<<8);
+						mipsinfo.i = eventId + 1;
 						mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 					}
 					break;
 
 				case 0x0a:	// WaitEvent
 					{
-						int ev, spec;
+						uint32 eventId = a0 - 1;
 
-						ev = a0 & 0xff;
-						spec = (a0 >> 8) & 0xff;
-
-						mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: WaitEvent(ev %d spec %d) PC=%x\n", ev, spec, mipsinfo.i);
+						mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
+						printlog(psx, "HLEBIOS: WaitEvent(%d) PC=%x\n", eventId, mipsinfo.i);
 						#endif
 
-						psx->Event[ev][spec].status = LE32(EvStACTIVE);
+						if (psx->Event[eventId].isValid)
+						{
+							if (psx->Event[eventId].enabled)
+							{
+								if (!psx->Event[eventId].fired)
+								{
+									psx->WAI = 1;
+									mips_shorten_frame(&psx->mipscpu);
+								}
+							}
+						}
 
 						// v0 = 1
 						mipsinfo.i = 1;
 						mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
-
-						psx->WAI = 1;
-						mips_shorten_frame(&psx->mipscpu);
 					}
 					break;
 
 				case 0x0b:	// TestEvent
 					{
-						int ev, spec;
-
-						ev   = a0 & 0xff;
-						spec = (a0 >> 8) & 0xff;
-
+						uint32 eventId = a0 - 1;
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: TestEvent(ev %d spec %d)\n", ev, spec);
+						printlog(psx, "HLEBIOS: TestEvent(%d)\n", eventId);
 						#endif
 
-						// v0 = (is event ready?)
-						if (psx->Event[ev][spec].status == LE32(EvStALREADY))
+						if (psx->Event[eventId].isValid)
 						{
-							psx->Event[ev][spec].status = LE32(EvStACTIVE);
-							mipsinfo.i = 1;
+							mipsinfo.i = psx->Event[eventId].fired;
 						}
 						else
 						{
 							mipsinfo.i = 0;
 						}
-
-                        if (psx->Event[ev][spec].mode == LE32(EvMdINTR))
-                            psx->WAI = 1;
 
 						mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 
@@ -1938,16 +1971,17 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x0c:	// EnableEvent
 					{
-						int ev, spec;
-
-						ev = a0 & 0xff;
-						spec = (a0 >> 8) & 0xff;
+						uint32 eventId = a0 - 1;
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: EnableEvent(ev %d spec %d)\n", ev, spec);
+						printlog(psx, "HLEBIOS: EnableEvent(%d)\n", eventId);
 						#endif
 
-						psx->Event[ev][spec].status = LE32(EvStACTIVE);
+						if (psx->Event[eventId].isValid)
+						{
+							psx->Event[eventId].enabled = 1;
+							psx->Event[eventId].fired = 0;
+						}
 
 						// v0 = 1
 						mipsinfo.i = 1;
@@ -1957,16 +1991,16 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x0d:	// DisableEvent
 					{
-						int ev, spec;
-
-						ev = a0 & 0xff;
-						spec = (a0 >> 8) & 0xff;
+						uint32 eventId = a0 - 1;
 
 						#if DEBUG_HLE_BIOS
-						printf("HLEBIOS: DisableEvent(ev %d spec %d)\n", ev, spec);
+						printlog(psx, "HLEBIOS: DisableEvent(%d)\n", eventId);
 						#endif
 
-						psx->Event[ev][spec].status = LE32(EvStWAIT);
+						if (psx->Event[eventId].isValid)
+						{
+							psx->Event[eventId].enabled = 0;
+						}
 
 						// v0 = 1
 						mipsinfo.i = 1;
@@ -1986,39 +2020,65 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 					mipsinfo.i = psx->irq_regs[33];
 					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_LO, &mipsinfo);
 					mipsinfo.i = mips_get_ePC(&psx->mipscpu);
-//					printf("ReturnFromException: IRQ state %x\n", irq_data & irq_mask);
-//					printf("HLEBIOS: ReturnFromException, cause = %08x, PC = %08x\n", mips_get_cause(), mipsinfo.i);
+//					printlog(psx, "ReturnFromException: IRQ state %x\n", irq_data & irq_mask);
+//					printlog(psx, "HLEBIOS: ReturnFromException, cause = %08x, PC = %08x\n", mips_get_cause(), mipsinfo.i);
 					mips_set_info(&psx->mipscpu, CPUINFO_INT_PC, &mipsinfo);
 
 					status = mips_get_status(&psx->mipscpu);
 					status = (status & 0xfffffff0) | ((status & 0x3c)>>2);
 					mips_set_status(&psx->mipscpu, status);
 
-					ps2_reschedule(psx);
-
 					return;	// force return to avoid PC=RA below
 					break;
 
 				case 0x19:	// HookEntryInt
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: HookEntryInt(%08x)\n", a0);
+					printlog(psx, "HLEBIOS: HookEntryInt(%08x)\n", a0);
 					#endif
-					psx->entry_int = a0;
+					psx->psx_ram[LONGJMP_BUFFER/4] = LE32(a0);
 					break;
 
 				case 0x3f:	// puts
-//					printf("HLEBIOS: puts\n");
+//					printlog(psx, "HLEBIOS: puts\n");
 					break;
 
 				case 0x5b:	// ChangeClearPAD
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: ChangeClearPAD\n");
+					printlog(psx, "HLEBIOS: ChangeClearPAD\n");
 					#endif
+					break;
+
+				case 0x4a: // InitCard
+					#if DEBUG_HLE_BIOS
+					printlog(psx, "HLEBIOS: InitCard\n");
+					#endif
+					break;
+
+				case 0x4b: // StartCard
+					#if DEBUG_HLE_BIOS
+					printlog(psx, "HLEBIOS: StartCard\n");
+					#endif
+					break;
+
+				case 0x56: // GetC0Table
+					#if DEBUG_HLE_BIOS
+					printlog(psx, "HLEBIOS: GetC0Table\n");
+					#endif
+					mipsinfo.i = C0TABLE_BEGIN;
+					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
+					break;
+
+				case 0x57: // GetB0Table
+					#if DEBUG_HLE_BIOS
+					printlog(psx, "HLEBIOS: GetB0Table\n");
+					#endif
+					mipsinfo.i = B0TABLE_BEGIN;
+					mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 					break;
 
 				default:
 					#if DEBUG_HLE_BIOS
-					printf("Unknown BIOS B0 call = %x\n", subcall);
+					printlog(psx, "Unknown BIOS B0 call = %x\n", subcall);
 					#endif
 					break;
 			}
@@ -2029,7 +2089,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 			{
 				case 0xa:	// ChangeClearRCnt
 					#if DEBUG_HLE_BIOS
-					printf("HLEBIOS: ChangeClearRCnt(%08x, %08x)\n", a0, a1);
+					printlog(psx, "HLEBIOS: ChangeClearRCnt(%08x, %08x)\n", a0, a1);
 					#endif
 
 					// v0 = (a0*4)+0x8600
@@ -2042,7 +2102,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				default:
 					#if DEBUG_HLE_BIOS
-					printf("Unknown BIOS C0 call = %x\n", subcall);
+					printlog(psx, "Unknown BIOS C0 call = %x\n", subcall);
 					#endif
 					break;
 			}
@@ -2127,7 +2187,7 @@ void psx_hw_runcounters(PSX_STATE *psx)
 					{
 						psx->iop_timers[i].count -= psx->iop_timers[i].target;
 
-	//					printf("Timer %d: handler = %08x, param = %08x\n", i, iop_timers[i].handler, iop_timers[i].hparam);
+	//					printlog(psx, "Timer %d: handler = %08x, param = %08x\n", i, iop_timers[i].handler, iop_timers[i].hparam);
 						call_irq_routine(psx, psx->iop_timers[i].handler, psx->iop_timers[i].hparam);
 
 						psx->timerexp = 1;

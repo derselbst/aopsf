@@ -182,13 +182,21 @@ struct IOPTIMER_STATE {
 #define RC_CLC		(0x0100)	// counter uses direct system clock
 #define RC_DIV8		(0x0200)	// (counter 2 only) system clock/8
 
+enum
+{
+	MAX_EVENT = 32,
+};
+
 typedef struct
 {
-	uint32 desc;
-	int32 status;
-	int32 mode;
-	uint32 fhandler;
-} EvtCtrlBlk[32];
+	uint32 isValid;
+	uint32 enabled;
+	uint32 classId;
+	uint32 spec;
+	uint32 mode;
+	uint32 func;
+	uint32 fired;
+} EvtCtrlBlk;
 
 // Sony event states
 #define EvStUNUSED	0x0000
@@ -244,6 +252,8 @@ struct psx_state
 
   uint32 initial_ram[(2*1024*1024)/4];
 
+  uint32 scratch[0x400 / 4];
+
   uint32 initialPC, initialSP;
   uint32 initialGP; // PSF1 only
   uint32 loadAddr;
@@ -296,14 +306,15 @@ struct psx_state
 
   struct IOPTIMER_STATE root_cnts;
 
+  uint32 eventsAllocated;
+
   EvtCtrlBlk *Event;
-  EvtCtrlBlk *CounterEvent;
 
   uint32 gpu_stat;
 
   int fcnt;
 
-  uint32 heap_addr, entry_int;
+  uint32 heap_addr;
 
   uint32 irq_regs[37];
 
