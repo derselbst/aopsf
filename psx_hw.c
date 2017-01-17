@@ -2331,7 +2331,7 @@ static void iop_sprintf(PSX_STATE *psx, char *out, char *fmt, uint32 pstart)
 
 			tfmt[0] = '%';
 			fp = 1;
-			while (((*cf >= '0') && (*cf <= '9')) || (*cf == '.'))
+			while (((*cf >= '0') && (*cf <= '9')) || (*cf == '.') || (*cf == 'l'))
 			{
 				tfmt[fp] = *cf;
 				fp++;
