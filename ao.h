@@ -41,6 +41,7 @@ typedef unsigned char ao_bool;
 #ifdef __GNUC__
 #include <stddef.h>	// get NULL
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifndef nil
 #define nil NULL
@@ -60,6 +61,7 @@ typedef unsigned char ao_bool;
 #ifdef _MSC_VER
 #include <stddef.h>	// get NULL
 #include <wchar.h> // for off_t
+#include <stdint.h>
 
 #ifndef nil
 #define nil NULL
@@ -91,42 +93,6 @@ typedef struct
 	char info[9][MAX_DISP_INFO_LENGTH];
 } ao_display_info;
 
-typedef unsigned char		uint8;
-typedef unsigned char		UINT8;
-typedef signed char			int8;
-typedef signed char			INT8;
-typedef unsigned short		uint16;
-typedef unsigned short		UINT16;
-typedef signed short		int16;
-typedef signed short		INT16;
-typedef signed int			int32;
-typedef unsigned int		uint32;
-#ifdef LONG_IS_64BIT
-typedef signed long             int64;
-typedef unsigned long           uint64;
-#else
-typedef signed long long	int64;
-typedef unsigned long long	uint64;
-#endif
-
-#ifdef WIN32
-#ifndef _BASETSD_H
-typedef signed int			INT32;
-typedef unsigned int		UINT32;
-typedef signed long long	INT64;
-typedef unsigned long long	UINT64;
-#endif
-#else
-typedef signed int			INT32;
-typedef unsigned int		UINT32;
-#ifdef LONG_IS_64BIT
-typedef signed long         INT64;
-typedef unsigned long       UINT64;
-#else
-typedef signed long long	INT64;
-typedef unsigned long long	UINT64;
-#endif
-#endif
 
 #ifndef INLINE
 #if defined(_MSC_VER)

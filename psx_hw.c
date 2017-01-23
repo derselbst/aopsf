@@ -83,7 +83,7 @@ void printlog(PSX_STATE *psx, const char *fmt, ...)
 #endif
 
 // take a snapshot of the CPU state for a thread
-static void FreezeThread(PSX_STATE *psx, int32 iThread, int flag)
+static void FreezeThread(PSX_STATE *psx, int32_t iThread, int flag)
 {
 	int i;
 	union cpuinfo mipsinfo;
@@ -132,7 +132,7 @@ static void FreezeThread(PSX_STATE *psx, int32 iThread, int flag)
 }
 
 // restore the CPU state from a thread's snapshot
-static void ThawThread(PSX_STATE *psx, int32 iThread)
+static void ThawThread(PSX_STATE *psx, int32_t iThread)
 {
 	int i;
 	union cpuinfo mipsinfo;
@@ -268,16 +268,16 @@ static void psx_irq_update(PSX_STATE *psx)
 	}
 }
 
-void psx_irq_set(PSX_STATE *psx, uint32 irq)
+void psx_irq_set(PSX_STATE *psx, uint32_t irq)
 {
 	psx->irq_data |= irq;
 
 	psx_irq_update(psx);
 }
 
-uint32 ioptimer_lw(struct IOPTIMER_STATE *state, offs_t offset, uint32 mem_mask);
+uint32_t ioptimer_lw(struct IOPTIMER_STATE *state, offs_t offset, uint32_t mem_mask);
 
-uint32 psx_hw_read(PSX_STATE *psx, offs_t offset, uint32 mem_mask)
+uint32_t psx_hw_read(PSX_STATE *psx, offs_t offset, uint32_t mem_mask)
 {
 	if (offset >= 0x00000000 && offset <= 0x007fffff)
 	{
@@ -379,7 +379,7 @@ uint32 psx_hw_read(PSX_STATE *psx, offs_t offset, uint32 mem_mask)
 	}
     else if (offset == 0x1f801078)
     {
-        uint32 val = psx->irq_masked ? 0 : 1;
+        uint32_t val = psx->irq_masked ? 0 : 1;
         psx->irq_masked = 1;
         psx_irq_update(psx);
         return val;
@@ -408,7 +408,7 @@ uint32 psx_hw_read(PSX_STATE *psx, offs_t offset, uint32 mem_mask)
 
 #define DMA_SPU_CYCLES_PER_HALFWORD (8)
 
-static void psx_dma4(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
+static void psx_dma4(PSX_STATE *psx, uint32_t madr, uint32_t bcr, uint32_t chcr)
 {
     int delay = 0;
 	if (chcr == 0x01000201)	// cpu to SPU
@@ -434,7 +434,7 @@ static void psx_dma4(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
     psx->dma4_delay = delay;
 }
 
-static void ps2_dma4(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
+static void ps2_dma4(PSX_STATE *psx, uint32_t madr, uint32_t bcr, uint32_t chcr)
 {
     int delay = 0;
     
@@ -465,7 +465,7 @@ static void ps2_dma4(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
     psx->dma4_delay = delay;
 }
 
-static void ps2_dma7(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
+static void ps2_dma7(PSX_STATE *psx, uint32_t madr, uint32_t bcr, uint32_t chcr)
 {
     int delay = 0;
     
@@ -503,23 +503,23 @@ static void ps2_dma7(PSX_STATE *psx, uint32 madr, uint32 bcr, uint32 chcr)
 #define IOP_INT_RTC4    (1<<15)
 #define IOP_INT_RTC5    (1<<16)
 
-static const uint32 intrflag[COUNTERS] = {
+static const uint32_t intrflag[COUNTERS] = {
 	IOP_INT_RTC0, IOP_INT_RTC1, IOP_INT_RTC2,
 	IOP_INT_RTC3, IOP_INT_RTC4, IOP_INT_RTC5
 };
 
-void ioptimer_set_rates(struct IOPTIMER_STATE *state, uint32 sysclock, uint32 dots, uint32 lines, uint32 lines_visible, uint32 refresh_rate) {
+void ioptimer_set_rates(struct IOPTIMER_STATE *state, uint32_t sysclock, uint32_t dots, uint32_t lines, uint32_t lines_visible, uint32_t refresh_rate) {
 	state->hz_sysclock = sysclock;
 	state->hz_hline = lines * refresh_rate;
 	state->hz_pixel = state->hz_hline * dots;
 
 	state->field_counter = 0;
-	state->field_vblank = ((uint64)(lines_visible)) * ((uint64)(sysclock));
-	state->field_total = ((uint64)(lines)) * ((uint64)(sysclock));
+	state->field_vblank = ((uint64_t)(lines_visible)) * ((uint64_t)(sysclock));
+	state->field_total = ((uint64_t)(lines)) * ((uint64_t)(sysclock));
 }
 
-static uint32 EMU_CALL cycles_until_gate(struct IOPTIMER_STATE *state) {
-	uint64 diff;
+static uint32_t EMU_CALL cycles_until_gate(struct IOPTIMER_STATE *state) {
+	uint64_t diff;
 	if (!(state->hz_hline)) return 0xFFFFFFFF;
 	if (state->field_counter < state->field_vblank) {
 		diff = state->field_vblank - state->field_counter;
@@ -528,20 +528,20 @@ static uint32 EMU_CALL cycles_until_gate(struct IOPTIMER_STATE *state) {
 		diff = state->field_total - state->field_counter;
 	}
 	diff += (state->hz_hline - 1);
-	diff /= ((uint64)(state->hz_hline));
+	diff /= ((uint64_t)(state->hz_hline));
 	if (diff > 0xFFFFFFFF) diff = 0xFFFFFFFF;
 	if (diff < 1) diff = 1;
-	return (uint32)diff;
+	return (uint32_t)diff;
 }
 
-uint32 ioptimer_cycles_until_interrupt(struct IOPTIMER_STATE *state) {
-	uint32 min = cycles_until_gate(state);
-	uint32 c;
+uint32_t ioptimer_cycles_until_interrupt(struct IOPTIMER_STATE *state) {
+	uint32_t min = cycles_until_gate(state);
+	uint32_t c;
 	//
 	// counters
 	//
 	for (c = 0; c < COUNTERS; c++) {
-		uint64 diff;
+		uint64_t diff;
 		if (!(state->counter[c].delta)) continue;
 		if (state->counter[c].counter >= state->counter[c].target) {
 			diff = 0;
@@ -549,21 +549,21 @@ uint32 ioptimer_cycles_until_interrupt(struct IOPTIMER_STATE *state) {
 		else {
 			diff = state->counter[c].target - state->counter[c].counter;
 			diff += (state->counter[c].delta - 1);
-			diff /= ((uint64)(state->counter[c].delta));
+			diff /= ((uint64_t)(state->counter[c].delta));
 		}
-		if (diff < ((uint64)(min))) min = (uint32)diff;
+		if (diff < ((uint64_t)(min))) min = (uint32_t)diff;
 	}
 	if (min < 1) min = 1;
 	return min;
 }
 
-static uint32 counters_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
-	uint32 intr = 0;
-	uint32 c;
+static uint32_t counters_advance(struct IOPTIMER_STATE *state, uint32_t cycles) {
+	uint32_t intr = 0;
+	uint32_t c;
 	for (c = 0; c < COUNTERS; c++) {
 		struct IOPTIMER_COUNTER *ctr = state->counter + c;;
 		if (!ctr->delta) continue;
-		ctr->counter += ((uint64)(cycles)) * ((uint64)(ctr->delta));
+		ctr->counter += ((uint64_t)(cycles)) * ((uint64_t)(ctr->delta));
 		//
 		// timer loop handling
 		//
@@ -581,7 +581,7 @@ static uint32 counters_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
 				// counter always loops on overflow (duh!)
 				ctr->counter -= ctr->target;
 				// counter now becomes the compare target
-				ctr->target = ((uint64)(state->hz_sysclock)) * ((uint64)(ctr->compare));
+				ctr->target = ((uint64_t)(state->hz_sysclock)) * ((uint64_t)(ctr->compare));
 				ctr->target_is_overflow = 0;
 			}
 			else {
@@ -595,10 +595,10 @@ static uint32 counters_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
 				}
 				else {
 					if (c < 3) {
-						ctr->target = ((uint64)(state->hz_sysclock)) << 16;
+						ctr->target = ((uint64_t)(state->hz_sysclock)) << 16;
 					}
 					else {
-						ctr->target = ((uint64)(state->hz_sysclock)) << 32;
+						ctr->target = ((uint64_t)(state->hz_sysclock)) << 32;
 					}
 					ctr->target_is_overflow = 1;
 				}
@@ -608,9 +608,9 @@ static uint32 counters_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
 	return intr;
 }
 
-static void counter_start(struct IOPTIMER_STATE *state, uint32 c) {
+static void counter_start(struct IOPTIMER_STATE *state, uint32_t c) {
 	struct IOPTIMER_COUNTER *ctr = state->counter + c;
-	uint32 delta = state->hz_sysclock;
+	uint32_t delta = state->hz_sysclock;
 	switch (c) {
 	case 0: if (ctr->mode & 0x100) { delta = state->hz_pixel; } break;
 	case 1: if (ctr->mode & 0x100) { delta = state->hz_hline; } break;
@@ -627,16 +627,16 @@ static void counter_start(struct IOPTIMER_STATE *state, uint32 c) {
 	}
 	ctr->counter = 0;
 	ctr->delta = delta;
-	ctr->target = ((uint64)(ctr->compare)) * ((uint64)(state->hz_sysclock));
+	ctr->target = ((uint64_t)(ctr->compare)) * ((uint64_t)(state->hz_sysclock));
 	ctr->target_is_overflow = 0;
 }
 
-static void counter_stop(struct IOPTIMER_STATE *state, uint32 c) {
+static void counter_stop(struct IOPTIMER_STATE *state, uint32_t c) {
 	state->counter[c].delta = 0;
 }
 
 static void gate_transition(struct IOPTIMER_STATE *state) {
-	uint32 c;
+	uint32_t c;
 	for (c = 0; c < COUNTERS; c++) {
 		// must be both enabled and gate-enabled
 		if ((state->counter[c].mode & 0x41) != 0x41) continue;
@@ -663,9 +663,9 @@ static void gate_transition(struct IOPTIMER_STATE *state) {
 	}
 }
 
-static uint32 gate_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
-	uint32 intr = 0;
-	state->field_counter += ((uint64)(cycles)) * ((uint64)(state->hz_hline));
+static uint32_t gate_advance(struct IOPTIMER_STATE *state, uint32_t cycles) {
+	uint32_t intr = 0;
+	state->field_counter += ((uint64_t)(cycles)) * ((uint64_t)(state->hz_hline));
 	//
 	// gate overflow loop
 	//
@@ -695,11 +695,11 @@ static uint32 gate_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
 	return intr;
 }
 
-uint32 ioptimer_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
-	uint32 intr = 0;
-	uint32 cycles_left = cycles;
+uint32_t ioptimer_advance(struct IOPTIMER_STATE *state, uint32_t cycles) {
+	uint32_t intr = 0;
+	uint32_t cycles_left = cycles;
 	while (cycles_left) {
-		uint32 g = cycles_until_gate(state);
+		uint32_t g = cycles_until_gate(state);
 		if (g > cycles_left) g = cycles_left;
 		intr |= counters_advance(state, g);
 		intr |= gate_advance(state, g);
@@ -708,10 +708,10 @@ uint32 ioptimer_advance(struct IOPTIMER_STATE *state, uint32 cycles) {
 	return intr;
 }
 
-uint32 ioptimer_lw(struct IOPTIMER_STATE *state, offs_t offset, uint32 mem_mask)
+uint32_t ioptimer_lw(struct IOPTIMER_STATE *state, offs_t offset, uint32_t mem_mask)
 {
-	uint32 d = 0;
-	uint32 c = (offset >> 4) & 0xf;
+	uint32_t d = 0;
+	uint32_t c = (offset >> 4) & 0xf;
 	struct IOPTIMER_COUNTER *ctr;
 	if (offset >= 0x1f801480)
 		c -= 5;
@@ -720,21 +720,21 @@ uint32 ioptimer_lw(struct IOPTIMER_STATE *state, offs_t offset, uint32 mem_mask)
 	switch (offset & 0xc)
 	{
 	case 0:
-		if (ctr->delta) { d = (uint32)((ctr->counter) / (uint64)(ctr->delta)); }
+		if (ctr->delta) { d = (uint32_t)((ctr->counter) / (uint64_t)(ctr->delta)); }
 		break;
 	case 4:
 		d = ctr->status;
 		ctr->status = 0;
 		break;
 	case 8:
-		d = (uint32)(ctr->compare);
+		d = (uint32_t)(ctr->compare);
 		break;
 	}
 	if (c < 3) d &= 0xffff;
 	return d & ~mem_mask;
 }
 
-void ioptimer_sw(struct IOPTIMER_STATE *state, offs_t offset, uint32 data, uint32 mem_mask)
+void ioptimer_sw(struct IOPTIMER_STATE *state, offs_t offset, uint32_t data, uint32_t mem_mask)
 {
 	int c = (offset >> 4) & 0xf;
 	struct IOPTIMER_COUNTER *ctr;
@@ -770,14 +770,14 @@ void ioptimer_sw(struct IOPTIMER_STATE *state, offs_t offset, uint32 data, uint3
 		}
 
 		if (ctr->delta) {
-			ctr->target = ctr->compare * ((uint64)(state->hz_sysclock));
+			ctr->target = ctr->compare * ((uint64_t)(state->hz_sysclock));
 			ctr->target_is_overflow = 0;
 			if (ctr->counter >= ctr->target) {
 				if (c < 3) {
-					ctr->target = ((uint64)(state->hz_sysclock)) << 16;
+					ctr->target = ((uint64_t)(state->hz_sysclock)) << 16;
 				}
 				else {
-					ctr->target = ((uint64)(state->hz_sysclock)) << 32;
+					ctr->target = ((uint64_t)(state->hz_sysclock)) << 32;
 				}
 				ctr->target_is_overflow = 1;
 			}
@@ -786,7 +786,7 @@ void ioptimer_sw(struct IOPTIMER_STATE *state, offs_t offset, uint32 data, uint3
 	}
 }
 
-void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32 data, uint32 mem_mask)
+void psx_hw_write(PSX_STATE *psx, offs_t offset, uint32_t data, uint32_t mem_mask)
 {
 	union cpuinfo mipsinfo;
 
@@ -1079,7 +1079,7 @@ void ps2_hw_frame(PSX_STATE *psx)
 #define C0_EXCEPTIONHANDLER_SIZE	(0x1000)
 
 // heap block struct offsets
-static void call_irq_routine(PSX_STATE *psx, uint32 routine, uint32 parameter)
+static void call_irq_routine(PSX_STATE *psx, uint32_t routine, uint32_t parameter)
 {
 	int j, oldICount;
 	union cpuinfo mipsinfo;
@@ -1155,9 +1155,9 @@ static void call_irq_routine(PSX_STATE *psx, uint32 routine, uint32 parameter)
 	psx->irq_mutex = 0;
 }
 
-void psx_bios_exception(PSX_STATE *psx, uint32 pc)
+void psx_bios_exception(PSX_STATE *psx, uint32_t pc)
 {
-	uint32 a0, status;
+	uint32_t a0, status;
 	union cpuinfo mipsinfo;
 	int i, oldICount;
 
@@ -1332,7 +1332,7 @@ void psx_bios_exception(PSX_STATE *psx, uint32 pc)
 	}
 }
 
-uint32 psx_get_state_size(uint32 version)
+uint32_t psx_get_state_size(uint32_t version)
 {
 	return sizeof(PSX_STATE) + spu_get_state_size(version);
 }
@@ -1349,7 +1349,7 @@ void   psx_register_console_callback(PSX_STATE *psx, psx_console_callback_t call
 	psx->console_context = context;
 }
 
-void psx_hw_init(PSX_STATE *psx, uint32 version)
+void psx_hw_init(PSX_STATE *psx, uint32_t version)
 {
     spucore_init();
     
@@ -1391,13 +1391,13 @@ void psx_hw_init(PSX_STATE *psx, uint32 version)
 
 	//Setup B0 table
 	{
-		uint32* table = (uint32*)(&psx->psx_ram[B0TABLE_BEGIN/4]);
+		uint32_t* table = (uint32_t*)(&psx->psx_ram[B0TABLE_BEGIN/4]);
 		table[0x5B] = LE32(C0_EXCEPTIONHANDLER_BEGIN);
 	}
 
 	//Setup C0 table
 	{
-		uint32* table = (uint32*)(&psx->psx_ram[C0TABLE_BEGIN/4]);
+		uint32_t* table = (uint32_t*)(&psx->psx_ram[C0TABLE_BEGIN/4]);
 		table[0x06] = LE32(C0_EXCEPTIONHANDLER_BEGIN);
 	}
 
@@ -1444,11 +1444,11 @@ void psx_hw_init(PSX_STATE *psx, uint32 version)
 	psx->offset_to_spu = sizeof(PSX_STATE);
 }
 
-void psx_bios_hle(PSX_STATE *psx, uint32 pc)
+void psx_bios_hle(PSX_STATE *psx, uint32_t pc)
 {
-	uint32 subcall, status;
+	uint32_t subcall, status;
 	union cpuinfo mipsinfo;
-	uint32 a0, a1, a2, a3;
+	uint32_t a0, a1, a2, a3;
 	int i;
 
 	if ((pc == 0) || (pc == 0x80000000))  	 	// IOP "null" state
@@ -1561,14 +1561,14 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x18:	// strncmp
 					{
-						uint8 *dst, *src;
+						uint8_t *dst, *src;
 
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: strncmp(%08x, %08x, %d)\n", a0, a1, a2);
 						#endif
 
-						dst = (uint8 *)psx->psx_ram;
-						src = (uint8 *)psx->psx_ram;
+						dst = (uint8_t *)psx->psx_ram;
+						src = (uint8_t *)psx->psx_ram;
 						dst += (a0 & 0x1fffff);
 						src += (a1 & 0x1fffff);
 
@@ -1580,14 +1580,14 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x19:	// strcpy
 					{
-						uint8 *dst, *src;
+						uint8_t *dst, *src;
 
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: strcpy(%08x, %08x)\n", a0, a1);
 						#endif
 
-						dst = (uint8 *)psx->psx_ram;
-						src = (uint8 *)psx->psx_ram;
+						dst = (uint8_t *)psx->psx_ram;
+						src = (uint8_t *)psx->psx_ram;
 						dst += (a0 & 0x1fffff);
 						src += (a1 & 0x1fffff);
 
@@ -1606,13 +1606,13 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x28:	// bzero
 					{
-						uint8 *dst;
+						uint8_t *dst;
 
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: bzero(%08x, %08x)\n", a0, a1);
 						#endif
 
-						dst = (uint8 *)psx->psx_ram;
+						dst = (uint8_t *)psx->psx_ram;
 						dst += (a0 & 0x1fffff);
 						memset(dst, 0, a1);
 					}
@@ -1620,14 +1620,14 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x2a:	// memcpy
 					{
-						uint8 *dst, *src;
+						uint8_t *dst, *src;
 
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: memcpy(%08x, %08x, %08x)\n", a0, a1, a2);
 						#endif
 
-						dst = (uint8 *)psx->psx_ram;
-						src = (uint8 *)psx->psx_ram;
+						dst = (uint8_t *)psx->psx_ram;
+						src = (uint8_t *)psx->psx_ram;
 						dst += (a0 & 0x1fffff);
 						src += (a1 & 0x1fffff);
 
@@ -1647,13 +1647,13 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x2b:	// memset
 					{
-						uint8 *dst;
+						uint8_t *dst;
 
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: memset(%08x, %08x, %08x)\n", a0, a1, a2);
 						#endif
 
-						dst = (uint8 *)psx->psx_ram;
+						dst = (uint8_t *)psx->psx_ram;
 						dst += (a0 & 0x1fffff);
 
 						while (a2)
@@ -1688,7 +1688,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x33:	// malloc
 					{
-						uint32 chunk, fd, size;
+						uint32_t chunk, fd, size;
 
 						size = a0;
 						if (size & 15)
@@ -1732,7 +1732,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
                     
 				case 0x34:  // free
 					{
-						uint32 chunk, size, fd, lastfd;
+						uint32_t chunk, size, fd, lastfd;
 
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: free(%08x)\n", a0);
@@ -1851,8 +1851,8 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 			{
 				case 0x07:	// DeliverEvent
 					{
-						uint32 classId = a0;
-						uint32 spec = a1;
+						uint32_t classId = a0;
+						uint32_t spec = a1;
 
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: DeliverEvent(%08x %08x)\n", classId, spec);
@@ -1878,11 +1878,11 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x08:	// OpenEvent
 					{
-						uint32 eventId = -1;
-						uint32 classId = a0;
-						uint32 spec = a1;
-						uint32 mode = a2;
-						uint32 func = a3;
+						uint32_t eventId = -1;
+						uint32_t classId = a0;
+						uint32_t spec = a1;
+						uint32_t mode = a2;
+						uint32_t func = a3;
 
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: OpenEvent(%08x, %08x, %08x, %08x)\n", a0, a1, a2, a3);
@@ -1922,7 +1922,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x0a:	// WaitEvent
 					{
-						uint32 eventId = a0 - 1;
+						uint32_t eventId = a0 - 1;
 
 						#if DEBUG_HLE_BIOS
 						mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
@@ -1949,7 +1949,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x0b:	// TestEvent
 					{
-						uint32 eventId = a0 - 1;
+						uint32_t eventId = a0 - 1;
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: TestEvent(%d)\n", eventId);
 						#endif
@@ -1973,7 +1973,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x0c:	// EnableEvent
 					{
-						uint32 eventId = a0 - 1;
+						uint32_t eventId = a0 - 1;
 
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: EnableEvent(%d)\n", eventId);
@@ -1993,7 +1993,7 @@ void psx_bios_hle(PSX_STATE *psx, uint32 pc)
 
 				case 0x0d:	// DisableEvent
 					{
-						uint32 eventId = a0 - 1;
+						uint32_t eventId = a0 - 1;
 
 						#if DEBUG_HLE_BIOS
 						printlog(psx, "HLEBIOS: DisableEvent(%d)\n", eventId);
@@ -2209,7 +2209,7 @@ void psx_hw_runcounters(PSX_STATE *psx)
 
 // PSXCPU callbacks
 
-uint8 program_read_byte_32le(void *state, offs_t address)
+uint8_t program_read_byte_32le(void *state, offs_t address)
 {
 	PSX_STATE *psx = (PSX_STATE *)state;
 	switch (address & 0x3)
@@ -2230,7 +2230,7 @@ uint8 program_read_byte_32le(void *state, offs_t address)
 	}
 }
 
-uint16 program_read_word_32le(void *state, offs_t address)
+uint16_t program_read_word_32le(void *state, offs_t address)
 {
 	PSX_STATE *psx = (PSX_STATE *)state;
 	if (address & 2)
@@ -2239,12 +2239,12 @@ uint16 program_read_word_32le(void *state, offs_t address)
 	return psx_hw_read(psx, address, 0xffff0000);
 }
 
-uint32 program_read_dword_32le(void *state, offs_t address)
+uint32_t program_read_dword_32le(void *state, offs_t address)
 {
 	return psx_hw_read((PSX_STATE *)state, address, 0);
 }
 
-void program_write_byte_32le(void *state, offs_t address, uint8 data)
+void program_write_byte_32le(void *state, offs_t address, uint8_t data)
 {
 	PSX_STATE *psx = (PSX_STATE *)state;
 	switch (address & 0x3)
@@ -2264,7 +2264,7 @@ void program_write_byte_32le(void *state, offs_t address, uint8 data)
 	}
 }
 
-void program_write_word_32le(void *state, offs_t address, uint16 data)
+void program_write_word_32le(void *state, offs_t address, uint16_t data)
 {
 	PSX_STATE *psx = (PSX_STATE *)state;
 	if (address & 2)
@@ -2276,12 +2276,12 @@ void program_write_word_32le(void *state, offs_t address, uint16 data)
 	psx_hw_write(psx, address, data, 0xffff0000);
 }
 
-void program_write_dword_32le(void *state, offs_t address, uint32 data)
+void program_write_dword_32le(void *state, offs_t address, uint32_t data)
 {
 	psx_hw_write((PSX_STATE *)state, address, data, 0);
 }
 
-static uint32 ccallArgumentIterator_GetNext(PSX_STATE *psx, uint32 current)
+static uint32_t ccallArgumentIterator_GetNext(PSX_STATE *psx, uint32_t current)
 {
 	union cpuinfo mipsinfo;
 	if (current > 3)
@@ -2298,12 +2298,12 @@ static uint32 ccallArgumentIterator_GetNext(PSX_STATE *psx, uint32 current)
 }
 
 // sprintf replacement
-static void iop_sprintf(PSX_STATE *psx, char *out, char *fmt, uint32 pstart)
+static void iop_sprintf(PSX_STATE *psx, char *out, char *fmt, uint32_t pstart)
 {
 	char temp[64], tfmt[64];
 	char *cf, *pstr;
 	int curparm, fp, isnum;
-	uint32 value;
+	uint32_t value;
 
 	curparm = pstart;
 	cf = fmt;
@@ -2365,7 +2365,7 @@ static void iop_sprintf(PSX_STATE *psx, char *out, char *fmt, uint32 pstart)
 				value = ccallArgumentIterator_GetNext(psx, curparm);
 //				printf("parameter %d = %x\n", curparm-pstart, mipsinfo.i);
 				curparm++;
-				sprintf(temp, tfmt, (int32)value);
+				sprintf(temp, tfmt, (int32_t)value);
 			}
 			else
 			{
@@ -2393,10 +2393,10 @@ static void iop_sprintf(PSX_STATE *psx, char *out, char *fmt, uint32 pstart)
 	*out = '\0';
 }
 
-int ProcessEventFlag(uint32 mode, uint32 * value, uint32 mask, uint32* resultPtr)
+int ProcessEventFlag(uint32_t mode, uint32_t * value, uint32_t mask, uint32_t* resultPtr)
 {
 	int success = 0;
-	uint32 maskResult = *value & mask;
+	uint32_t maskResult = *value & mask;
 
 	if (mode & WEF_OR)
 	{
@@ -2424,11 +2424,11 @@ int ProcessEventFlag(uint32 mode, uint32 * value, uint32 mask, uint32* resultPtr
 }
 
 // PS2 IOP callbacks
-void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
+void psx_iop_call(PSX_STATE *psx, uint32_t pc, uint32_t callnum)
 {
-	uint32 scan;
+	uint32_t scan;
 	char *mname, *str1, *str2, *str3, name[9], out[512];
-	uint32 a0, a1, a2, a3;
+	uint32_t a0, a1, a2, a3;
 	union cpuinfo mipsinfo;
 	int i;
 
@@ -2542,7 +2542,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 	}
 	else if (!strcmp(name, "thbase"))
 	{
-		uint32 newAlloc;
+		uint32_t newAlloc;
 
 		switch (callnum)
 		{
@@ -2636,11 +2636,11 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				psx->threads[a0].save_regs[4] = a1;
 
 				{
-					uint32 stackAddress = psx->threads[a0].stackloc + psx->threads[a0].stacksize;
-					uint32 fixedSize = ((a1 + 0x3) & ~0x3);
-					uint32 copyAddress = stackAddress - a1;
+					uint32_t stackAddress = psx->threads[a0].stackloc + psx->threads[a0].stacksize;
+					uint32_t fixedSize = ((a1 + 0x3) & ~0x3);
+					uint32_t copyAddress = stackAddress - a1;
 					stackAddress -= fixedSize;
-					memcpy(((uint8*)psx->psx_ram) + copyAddress, ((uint8*)psx->psx_ram) + a2, a1);
+					memcpy(((uint8_t*)psx->psx_ram) + copyAddress, ((uint8_t*)psx->psx_ram) + a2, a1);
 					psx->threads[a0].save_regs[29] = stackAddress - 0x10;
 					psx->threads[a0].save_regs[5] = copyAddress;
 				}
@@ -2745,7 +2745,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					psx->threads[psx->iCurThread].iState = TS_WAITDELAY;
 					dTicks /= (double)1000000.0;
 					dTicks *= (double)36864000.0;	// 768*48000 = IOP native-mode clock rate
-					psx->threads[psx->iCurThread].waitparm = (uint32)dTicks;
+					psx->threads[psx->iCurThread].waitparm = (uint32_t)dTicks;
 					psx->rescheduleNeeded = 1;
 				}
 				break;
@@ -2767,15 +2767,15 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 39:// USec2SysClock
 				{
-					uint64 dTicks = (uint64)a0;
-					uint32 hi, lo;
+					uint64_t dTicks = (uint64_t)a0;
+					uint32_t hi, lo;
 
 					#if DEBUG_HLE_IOP
 					printlog(psx, "IOP: USec2SysClock(%d %08x)\n", a0, a1);
 					#endif
 
-					dTicks *= (uint64)36864000;
-					dTicks /= (uint64)1000000;
+					dTicks *= (uint64_t)36864000;
+					dTicks /= (uint64_t)1000000;
 
 					hi = dTicks>>32;
 					lo = dTicks & 0xffffffff;
@@ -2790,8 +2790,8 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 40://SysClock2USec
 				{
-					uint64 temp;
-					uint32 seconds, usec;
+					uint64_t temp;
+					uint32_t seconds, usec;
 
 					#if DEBUG_HLE_IOP
 					printlog(psx, "IOP: SysClock2USec(%08x %08x %08x)\n", a0, a1, a2);
@@ -2805,10 +2805,10 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					a2 /= 4;
 
 					temp = LE32(psx->psx_ram[a0]);
-					temp |= (uint64)LE32(psx->psx_ram[a0+1])<<32;
+					temp |= (uint64_t)LE32(psx->psx_ram[a0+1])<<32;
 
-					temp *= (uint64)1000000;
-					temp /= (uint64)36864000;
+					temp *= (uint64_t)1000000;
+					temp /= (uint64_t)36864000;
 
 					// temp now is USec
 					seconds = (temp / 1000000) & 0xffffffff;
@@ -2831,7 +2831,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 			case 4:	// CreateEventFlag
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
 				#if DEBUG_HLE_IOP
-				printlog(psx, "IOP: CreateEventFlag(%08x) (PC=%x)\n", a0, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: CreateEventFlag(%08x) (PC=%x)\n", a0, (uint32_t)mipsinfo.i);
 				#endif
 
 				a0 &= 0x1fffff;
@@ -2915,7 +2915,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				a0--;
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
 				#if DEBUG_HLE_IOP
-				printlog(psx, "IOP: ClearEventFlag(%d %08x) (PC=%x)\n", a0, a1, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: ClearEventFlag(%d %08x) (PC=%x)\n", a0, a1, (uint32_t)mipsinfo.i);
 				#endif
 
 				psx->evflags[a0].value &= a1;
@@ -2940,7 +2940,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				a0--;
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printlog(psx, "IOP: WaitEventFlag(%d %08x %d %08x PC=%x)\n", a0, a1, a2, a3, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: WaitEventFlag(%d %08x %d %08x PC=%x)\n", a0, a1, a2, a3, (uint32_t)mipsinfo.i);
 				#endif
 
 				a3 &= 0x1fffff;
@@ -3095,7 +3095,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				a0--;
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printlog(psx, "IOP: WaitSema(%d) (cnt %d) (th %d) (PC=%x)\n", a0, psx->iCurThread, psx->semaphores[a0].current, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: WaitSema(%d) (cnt %d) (th %d) (PC=%x)\n", a0, psx->iCurThread, psx->semaphores[a0].current, (uint32_t)mipsinfo.i);
 				#endif
 
 				if (psx->semaphores[a0].current > 0)
@@ -3217,14 +3217,14 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 		{
 			case 12:	// memcpy
 				{
-					uint8 *dst, *src;
+					uint8_t *dst, *src;
 
 					#if DEBUG_HLE_IOP
 					printlog(psx, "IOP: memcpy(%08x, %08x, %d)\n", a0, a1, a2);
 					#endif
 
-					dst = (uint8 *)&psx->psx_ram[(a0&0x1fffff)/4];
-					src = (uint8 *)&psx->psx_ram[(a1&0x1fffff)/4];
+					dst = (uint8_t *)&psx->psx_ram[(a0&0x1fffff)/4];
+					src = (uint8_t *)&psx->psx_ram[(a1&0x1fffff)/4];
 					// get exact byte alignment
 					dst += a0 % 4;
 					src += a1 % 4;
@@ -3245,14 +3245,14 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 13:	// memmove
 				{
-					uint8 *dst, *src;
+					uint8_t *dst, *src;
 
 					#if DEBUG_HLE_IOP
 					printlog(psx, "IOP: memmove(%08x, %08x, %d)\n", a0, a1, a2);
 					#endif
 
-					dst = (uint8 *)&psx->psx_ram[(a0&0x1fffff)/4];
-					src = (uint8 *)&psx->psx_ram[(a1&0x1fffff)/4];
+					dst = (uint8_t *)&psx->psx_ram[(a0&0x1fffff)/4];
+					src = (uint8_t *)&psx->psx_ram[(a1&0x1fffff)/4];
 					// get exact byte alignment
 					dst += a0 % 4;
 					src += a1 % 4;
@@ -3276,14 +3276,14 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 14:	// memset
 				{
-					uint8 *dst;
+					uint8_t *dst;
 
 					#if DEBUG_HLE_IOP
 					mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-					printlog(psx, "IOP: memset(%08x, %02x, %d) [PC=%x]\n", a0, a1, a2, (uint32)mipsinfo.i);
+					printlog(psx, "IOP: memset(%08x, %02x, %d) [PC=%x]\n", a0, a1, a2, (uint32_t)mipsinfo.i);
 					#endif
 
-					dst = (uint8 *)&psx->psx_ram[(a0&0x1fffff)/4];
+					dst = (uint8_t *)&psx->psx_ram[(a0&0x1fffff)/4];
 					dst += (a0 & 3);
 
 					memset(dst, a1, a2);
@@ -3292,13 +3292,13 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 17:	// bzero
 				{
-					uint8 *dst;
+					uint8_t *dst;
 
 					#if DEBUG_HLE_IOP
 					printlog(psx, "IOP: bzero(%08x, %08x)\n", a0, a1);
 					#endif
 
-					dst = (uint8 *)&psx->psx_ram[(a0&0x1fffff)/4];
+					dst = (uint8_t *)&psx->psx_ram[(a0&0x1fffff)/4];
 					dst += (a0 & 3);
 					memset(dst, 0, a1);
 				}
@@ -3312,7 +3312,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printlog(psx, "IOP: sprintf(%08x, %s, ...) [PC=%08x]\n", a0, str1, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: sprintf(%08x, %s, ...) [PC=%08x]\n", a0, str1, (uint32_t)mipsinfo.i);
 				printlog(psx, "%x %x %x %x\n", a0, a1, a2, a3);
 				#endif
 
@@ -3326,13 +3326,13 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 #if 0
 			case 21:    // strchr ??
 				{
-					uint8 *src, chr;
+					uint8_t *src, chr;
 
 					#if DEBUG_HLE_IOP
 					printlog(psx, "IOP: strchr(%08x, %08x)\n", a0, a1);
 					#endif
 
-					src = (uint8 *)&psx->psx_ram[(a0 & 0x1fffff) / 4];
+					src = (uint8_t *)&psx->psx_ram[(a0 & 0x1fffff) / 4];
 					src += a0 & 3;
 
 					while (*src != a1 && *src != '\0')
@@ -3355,14 +3355,14 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 22:    // strcmp
 				{
-					uint8 *src0, *src1;
+					uint8_t *src0, *src1;
 
 					#if DEBUG_HLE_IOP
 					printlog(psx, "IOP: strcmp(%08x, %08x)\n", a0, a1);
 					#endif
 
-					src0 = (uint8 *)&psx->psx_ram[(a0 & 0x1fffff) / 4];
-					src1 = (uint8 *)&psx->psx_ram[(a1 & 0x1fffff) / 4];
+					src0 = (uint8_t *)&psx->psx_ram[(a0 & 0x1fffff) / 4];
+					src1 = (uint8_t *)&psx->psx_ram[(a1 & 0x1fffff) / 4];
 					src0 += a0 & 3;
 					src1 += a1 & 3;
 
@@ -3373,14 +3373,14 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 			case 23:	// strcpy
 				{
-					uint8 *dst, *src;
+					uint8_t *dst, *src;
 
 					#if DEBUG_HLE_IOP
 					printlog(psx, "IOP: strcpy(%08x, %08x)\n", a0, a1);
 					#endif
 
-					dst = (uint8 *)&psx->psx_ram[(a0&0x1fffff)/4];
-					src = (uint8 *)&psx->psx_ram[(a1&0x1fffff)/4];
+					dst = (uint8_t *)&psx->psx_ram[(a0&0x1fffff)/4];
+					src = (uint8_t *)&psx->psx_ram[(a1&0x1fffff)/4];
 					// get exact byte alignment
 					dst += a0 % 4;
 					src += a1 % 4;
@@ -3405,7 +3405,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 					#if DEBUG_HLE_IOP
 					mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-					printlog(psx, "IOP: strlen(%08x) [PC=%x]\n", a0, (uint32)mipsinfo.i);
+					printlog(psx, "IOP: strlen(%08x) [PC=%x]\n", a0, (uint32_t)mipsinfo.i);
 					#endif
 
 					dst = (char *)&psx->psx_ram[(a0&0x1fffff)/4];
@@ -3556,7 +3556,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 			case 23:	// QueryIntrContext
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printlog(psx, "IOP: QueryIntrContext(PC=%x)\n", (uint32)mipsinfo.i);
+				printlog(psx, "IOP: QueryIntrContext(PC=%x)\n", (uint32_t)mipsinfo.i);
 				#endif
 				mipsinfo.i = 0;
 				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
@@ -3581,7 +3581,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				a0 &= 0x1fffff;
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printlog(psx, "IOP: RegisterLibraryEntries(%08x) (PC=%x)\n", a0, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: RegisterLibraryEntries(%08x) (PC=%x)\n", a0, (uint32_t)mipsinfo.i);
 				#endif
 
 				if (psx->psx_ram[a0/4] == LE32(0x41c00000))
@@ -3612,7 +3612,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 	}
 	else if (!strcmp(name, "sysmem"))
 	{
-		uint32 newAlloc;
+		uint32_t newAlloc;
 
 		switch (callnum)
 		{
@@ -3698,7 +3698,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printlog(psx, "KTTY: %s [PC=%x]\n", out, (uint32)mipsinfo.i);
+				printlog(psx, "KTTY: %s [PC=%x]\n", out, (uint32_t)mipsinfo.i);
 				#endif
 
 				if (psx->console_callback)
@@ -3723,8 +3723,8 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 	}
 	else if (!strcmp(name, "modload"))
 	{
-		uint8 *tempmem;
-		uint32 newAlloc;
+		uint8_t *tempmem;
+		uint32_t newAlloc;
 
 		switch (callnum)
 		{
@@ -3746,18 +3746,18 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				}
 				psf2_set_loadaddr(psx, newAlloc + 2048);
 
-				tempmem = (uint8*) psx->elf_scratch;
+				tempmem = (uint8_t*) psx->elf_scratch;
 				if (psf2_load_file(psx, mname, tempmem, 2*1024*1024) != 0xffffffff)
 				{
-					uint32 start;
+					uint32_t start;
 					int i;
 
 					start = psf2_load_elf(psx, tempmem, 2*1024*1024);
 
 					if (start != 0xffffffff)
 					{
-						uint32 args[20], numargs = 1, argofs;
-						uint8 *argwalk = (uint8 *)psx->psx_ram, *argbase;
+						uint32_t args[20], numargs = 1, argofs;
+						uint8_t *argwalk = (uint8_t *)psx->psx_ram, *argbase;
 
 						argwalk += (a2 & 0x1fffff);
 						argbase = argwalk;
@@ -3856,7 +3856,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 
 					mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
 					#if DEBUG_HLE_IOP
-					printlog(psx, "IOP: open(\"%s\") (PC=%08x)\n", mname, (uint32)mipsinfo.i);
+					printlog(psx, "IOP: open(\"%s\") (PC=%08x)\n", mname, (uint32_t)mipsinfo.i);
 					#endif
                     
                     psx->filename[slot2use] = malloc(strlen(mname)+1);
@@ -3865,7 +3865,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 					psx->filepos[slot2use] = 0;
 					psx->filestat[slot2use] = 1;
                     {
-                        uint8 tempbuf[4];
+                        uint8_t tempbuf[4];
                         psx->filesize[slot2use] = psx->readfile(psx->readfile_context, mname, 0, tempbuf, 0);
                     }
 
@@ -3885,16 +3885,16 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				a0--;
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printlog(psx, "IOP: close(%d) (PC=%08x)\n", a0, (uint32)mipsinfo.i);
+				printlog(psx, "IOP: close(%d) (PC=%08x)\n", a0, (uint32_t)mipsinfo.i);
 				#endif
 				free(psx->filename[a0]);
-				psx->filename[a0] = (uint8 *)NULL;
+				psx->filename[a0] = (uint8_t *)NULL;
 				psx->filepos[a0] = 0;
 				psx->filestat[a0] = 0;
 				break;
 
 			case 6: { // read
-				uint8 *rp;
+				uint8_t *rp;
 
 				a0--;
 
@@ -3905,7 +3905,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				if (psx->filepos[a0] + a2 > psx->filesize[a0])
 					a2 = psx->filesize[a0] - psx->filepos[a0];
 
-				rp = (uint8 *)psx->psx_ram;
+				rp = (uint8_t *)psx->psx_ram;
 				rp += (a1 & 0x1fffff);
 
 				a2 = psx->readfile(psx->readfile_context, psx->filename[a0], psx->filepos[a0], rp, a2);
@@ -3923,7 +3923,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				a0--;
 				#if DEBUG_HLE_IOP
 				mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-				printlog(psx, "IOP: lseek(%d, %d, %s) (PC=%08x)\n", a0, a1, seek_types[a2], (uint32)mipsinfo.i);
+				printlog(psx, "IOP: lseek(%d, %d, %s) (PC=%08x)\n", a0, a1, seek_types[a2], (uint32_t)mipsinfo.i);
 				#endif
 
 				switch (a2)
@@ -3999,10 +3999,10 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 				if (!strcmp(name, psx->reglibs[lib].name))
 				{
 					#if DEBUG_HLE_IOP
-					uint32 PC;
+					uint32_t PC;
 
 					mips_get_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R31, &mipsinfo);
-					PC = (uint32)mipsinfo.i;
+					PC = (uint32_t)mipsinfo.i;
 					#endif
 
 					// zap the delay slot handling
@@ -4018,7 +4018,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 							 psx->reglibs[lib].name,
 							 lib,
 							 callnum,
-							 (uint32)mipsinfo.i,
+							 (uint32_t)mipsinfo.i,
 							 a0, a1, a2, a3, PC);
 					#endif
 
@@ -4044,7 +4044,7 @@ void psx_iop_call(PSX_STATE *psx, uint32 pc, uint32 callnum)
 	}
 }
 
-void psx_set_refresh(PSX_STATE *psx, uint32 refresh)
+void psx_set_refresh(PSX_STATE *psx, uint32_t refresh)
 {
     psx->psf_refresh = refresh;
 }

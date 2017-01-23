@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdint.h>
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -37,15 +38,6 @@
 #define EMU_CALL_  __cdecl
 #define EMU_INLINE __inline
 
-#define uint8  unsigned char
-#define uint16 unsigned short
-#define uint32 unsigned int
-#define uint64 unsigned __int64
-#define sint8    signed char
-#define sint16   signed short
-#define sint32   signed int
-#define sint64   signed __int64
-
 /////////////////////////////////////////////////////////////////////////////
 //
 // LINUX / other platform definitions
@@ -61,27 +53,6 @@
 
 #define EMU_CALL_
 #define EMU_INLINE __inline
-
-#ifdef HAVE_STDINT_H
-#include <stdint.h>
-#define uint8  uint8_t
-#define uint16 uint16_t
-#define uint32 uint32_t
-#define uint64 uint64_t
-#define sint8  int8_t
-#define sint16 int16_t
-#define sint32 int32_t
-#define sint64 int64_t
-#else
-#define uint8  unsigned char
-#define uint16 unsigned short
-#define uint32 unsigned int
-#define uint64 unsigned long long
-#define sint8    signed char
-#define sint16   signed short
-#define sint32   signed int
-#define sint64   signed long long
-#endif
 
 #endif
 

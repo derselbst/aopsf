@@ -24,14 +24,14 @@ typedef int offs_t;
 #define UNUSEDARG
 #endif
 
-typedef int8		(*read8_handler)  (void *, UNUSEDARG offs_t offset);
-typedef void		(*write8_handler) (void *, UNUSEDARG offs_t offset, UNUSEDARG int8 data);
-typedef int16		(*read16_handler) (void *, UNUSEDARG offs_t offset, UNUSEDARG int16 mem_mask);
-typedef void		(*write16_handler)(void *, UNUSEDARG offs_t offset, UNUSEDARG int16 data, UNUSEDARG int16 mem_mask);
-typedef int32		(*read32_handler) (void *, UNUSEDARG offs_t offset, UNUSEDARG int32 mem_mask);
-typedef void		(*write32_handler)(void *, UNUSEDARG offs_t offset, UNUSEDARG int32 data, UNUSEDARG int32 mem_mask);
-typedef int64		(*read64_handler) (void *, UNUSEDARG offs_t offset, UNUSEDARG int64 mem_mask);
-typedef void		(*write64_handler)(void *, UNUSEDARG offs_t offset, UNUSEDARG int64 data, UNUSEDARG int64 mem_mask);
+typedef int8_t		(*read8_handler)  (void *, UNUSEDARG offs_t offset);
+typedef void		(*write8_handler) (void *, UNUSEDARG offs_t offset, UNUSEDARG int8_t data);
+typedef int16_t		(*read16_handler) (void *, UNUSEDARG offs_t offset, UNUSEDARG int16_t mem_mask);
+typedef void		(*write16_handler)(void *, UNUSEDARG offs_t offset, UNUSEDARG int16_t data, UNUSEDARG int16_t mem_mask);
+typedef int32_t		(*read32_handler) (void *, UNUSEDARG offs_t offset, UNUSEDARG int32_t mem_mask);
+typedef void		(*write32_handler)(void *, UNUSEDARG offs_t offset, UNUSEDARG int32_t data, UNUSEDARG int32_t mem_mask);
+typedef int64_t		(*read64_handler) (void *, UNUSEDARG offs_t offset, UNUSEDARG int64_t mem_mask);
+typedef void		(*write64_handler)(void *, UNUSEDARG offs_t offset, UNUSEDARG int64_t data, UNUSEDARG int64_t mem_mask);
 
 union read_handlers_t
 {
@@ -55,14 +55,14 @@ union write_handlers_t
 
 struct address_map_t
 {
-	uint32				flags;				/* flags and additional info about this entry */
+	uint32_t				flags;				/* flags and additional info about this entry */
 	offs_t				start, end;			/* start/end (or mask/match) values */
 	offs_t				mirror;				/* mirror bits */
 	offs_t				mask;				/* mask bits */
 	union read_handlers_t read;				/* read handler callback */
 	union write_handlers_t write;			/* write handler callback */
 	void *				memory;				/* pointer to memory backing this entry */
-	uint32				share;				/* index of a shared memory block */
+	uint32_t				share;				/* index of a shared memory block */
 	void **				base;				/* receives pointer to memory (optional) */
 	size_t *			size;				/* receives size of area in bytes (optional) */
 };
@@ -70,12 +70,12 @@ typedef struct address_map_t *(*construct_map_t)(void *, struct address_map_t *m
 
 union cpuinfo
 {
-	int64	i;											/* generic integers */
+	int64_t	i;											/* generic integers */
 	void *	p;											/* generic pointers */
 	genf *  f;											/* generic function pointers */
 	char *	s;											/* generic strings */
 
-	void	(*setinfo)(void *, UINT32 state, union cpuinfo *info);/* CPUINFO_PTR_SET_INFO */
+	void	(*setinfo)(void *, uint32_t state, union cpuinfo *info);/* CPUINFO_PTR_SET_INFO */
 	void	(*getcontext)(void *, void *context);				/* CPUINFO_PTR_GET_CONTEXT */
 	void	(*setcontext)(void *, void *context);				/* CPUINFO_PTR_SET_CONTEXT */
 	void	(*init)(void *);								/* CPUINFO_PTR_INIT */
@@ -169,8 +169,8 @@ enum
 #define MIPS_IRQ4	( 4 )
 #define MIPS_IRQ5	( 5 )
 
-#define MIPS_BYTE_EXTEND( a ) ( (INT32)(INT8)a )
-#define MIPS_WORD_EXTEND( a ) ( (INT32)(INT16)a )
+#define MIPS_BYTE_EXTEND( a ) ( (int32_t)(int8_t)a )
+#define MIPS_WORD_EXTEND( a ) ( (int32_t)(int16_t)a )
 
 #define INS_OP( op ) ( ( op >> 26 ) & 63 )
 #define INS_RS( op ) ( ( op >> 21 ) & 31 )
@@ -283,19 +283,19 @@ enum
 #define CF_RFE ( 16 )
 
 #ifdef MAME_DEBUG
-extern unsigned DasmMIPS(char *buff, unsigned _pc, uint8 *memory);
+extern unsigned DasmMIPS(char *buff, unsigned _pc, uint8_t *memory);
 #endif
 
 #if (HAS_PSXCPU)
-extern void psxcpu_get_info(MIPS_CPU_CONTEXT *, UINT32 state, union cpuinfo *info);
+extern void psxcpu_get_info(MIPS_CPU_CONTEXT *, uint32_t state, union cpuinfo *info);
 #endif
 
-extern void mips_get_info(MIPS_CPU_CONTEXT *, UINT32 state, union cpuinfo *info);
-extern void mips_set_info(MIPS_CPU_CONTEXT *, UINT32 state, union cpuinfo *info);
+extern void mips_get_info(MIPS_CPU_CONTEXT *, uint32_t state, union cpuinfo *info);
+extern void mips_set_info(MIPS_CPU_CONTEXT *, uint32_t state, union cpuinfo *info);
 extern void mips_shorten_frame(MIPS_CPU_CONTEXT *);
 extern int mips_execute( MIPS_CPU_CONTEXT *, int cycles );
-extern uint32 psf2_load_file(PSX_STATE *, const char *file, uint8 *buf, uint32 buflen);
-extern uint32 psf2_load_elf(PSX_STATE *, const uint8 *start, uint32 len);
+extern uint32_t psf2_load_file(PSX_STATE *, const char *file, uint8_t *buf, uint32_t buflen);
+extern uint32_t psf2_load_elf(PSX_STATE *, const uint8_t *start, uint32_t len);
 void psx_hw_runcounters(PSX_STATE *);
 int mips_get_icount(MIPS_CPU_CONTEXT *);
 void mips_set_icount(MIPS_CPU_CONTEXT *, int count);

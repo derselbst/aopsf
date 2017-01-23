@@ -16,7 +16,7 @@
 /*
 ** Static information
 */
-sint32 EMU_CALL spu_init(void) { return 0; }
+int32_t EMU_CALL spu_init(void) { return 0; }
 
 ////////////////////////////////////////////////////////////////////////////////
 /*
@@ -29,35 +29,35 @@ sint32 EMU_CALL spu_init(void) { return 0; }
 
 
 struct SPU_STATE {
-  uint8 version;
-  uint32 offset_to_ram;
-  uint32 offset_to_core[2];
+  uint8_t version;
+  uint32_t offset_to_ram;
+  uint32_t offset_to_core[2];
 
   /* actual plugin option */
-  uint8 global_main_on;
-  uint8 global_effect_on;
+  uint8_t global_main_on;
+  uint8_t global_effect_on;
 
-  uint32 tsa[2];
-  uint8 dma_mode[2];
+  uint32_t tsa[2];
+  uint8_t dma_mode[2];
 
-  uint8 is_on[2];
-  uint8 is_audible[2];
-  uint8 is_reverb_enabled[2];
-  uint8 is_irq_enabled[2];
+  uint8_t is_on[2];
+  uint8_t is_audible[2];
+  uint8_t is_reverb_enabled[2];
+  uint8_t is_irq_enabled[2];
 
-  uint16 mystery_dma[2];
+  uint16_t mystery_dma[2];
     
-  sint16 *sample_buffer;
-  uint32 samples_remain;
+  int16_t *sample_buffer;
+  uint32_t samples_remain;
     
-  uint32 samples_advance;
+  uint32_t samples_advance;
 };
 
 /*
 ** Get size depending on version
 */
-uint32 EMU_CALL spu_get_state_size(uint8 version) {
-  uint32 size = 0;
+uint32_t EMU_CALL spu_get_state_size(uint8_t version) {
+  uint32_t size = 0;
   if(version != 2) { version = 1; }
   size += sizeof(struct SPU_STATE);
   switch(version) {
@@ -76,8 +76,8 @@ uint32 EMU_CALL spu_get_state_size(uint8 version) {
 /*
 ** Initialize SPU state
 */
-void EMU_CALL spu_clear_state(void *state, uint8 version) {
-  uint32 offset;
+void EMU_CALL spu_clear_state(void *state, uint8_t version) {
+  uint32_t offset;
   if(version != 2) { version = 1; }
   /*
   ** Clear to zero
@@ -134,11 +134,11 @@ void EMU_CALL spu_clear_state(void *state, uint8 version) {
 /*
 ** Enable/disable reverb
 */
-void EMU_CALL spu_enable_reverb(void *state, uint8 enable) {
+void EMU_CALL spu_enable_reverb(void *state, uint8_t enable) {
   SPUSTATE->global_effect_on = enable;
 }
 
-void EMU_CALL spu_enable_main(void *state, uint8 enable) {
+void EMU_CALL spu_enable_main(void *state, uint8_t enable) {
   SPUSTATE->global_main_on = enable;
 }
 
@@ -147,49 +147,49 @@ void EMU_CALL spu_enable_main(void *state, uint8 enable) {
 ** Hardware register load/store
 */
 
-static uint32 EMU_CALL get_tsa(struct SPU_STATE *state, uint32 core) {
+static uint32_t EMU_CALL get_tsa(struct SPU_STATE *state, uint32_t core) {
   return state->tsa[core];
 }
 
-static void EMU_CALL set_tsa(struct SPU_STATE *state, uint32 core, uint32 a, uint32 mask) {
+static void EMU_CALL set_tsa(struct SPU_STATE *state, uint32_t core, uint32_t a, uint32_t mask) {
   state->tsa[core] &= ~mask;
   state->tsa[core] |= a & mask;
 }
 
-static EMU_INLINE uint16 EMU_CALL get_transfer(struct SPU_STATE *state, uint32 core) {
-  uint32 memmask = (state->version == 2) ? 0x001FFFFE : 0x0007FFFE;
-  uint16 d = *((uint16*)(((uint8*)(SPURAM)) + ((state->tsa[core]) & memmask)));
+static EMU_INLINE uint16_t EMU_CALL get_transfer(struct SPU_STATE *state, uint32_t core) {
+  uint32_t memmask = (state->version == 2) ? 0x001FFFFE : 0x0007FFFE;
+  uint16_t d = *((uint16_t*)(((uint8_t*)(SPURAM)) + ((state->tsa[core]) & memmask)));
   state->tsa[core] += 2;
   state->tsa[core] &= memmask;
   return d;
 }
 
-static EMU_INLINE void EMU_CALL set_transfer(struct SPU_STATE *state, uint32 core, uint16 d) {
-  uint32 memmask = (state->version == 2) ? 0x001FFFFE : 0x0007FFFE;
-  *((uint16*)(((uint8*)(SPURAM)) + ((state->tsa[core]) & memmask))) = d;
+static EMU_INLINE void EMU_CALL set_transfer(struct SPU_STATE *state, uint32_t core, uint16_t d) {
+  uint32_t memmask = (state->version == 2) ? 0x001FFFFE : 0x0007FFFE;
+  *((uint16_t*)(((uint8_t*)(SPURAM)) + ((state->tsa[core]) & memmask))) = d;
   state->tsa[core] += 2;
   state->tsa[core] &= memmask;
 }
 
-void EMU_CALL spu_dma(void *state, uint32 core, void *mem, uint32 mem_ofs, uint32 mem_mask, uint32 bytes, int iswrite) {
-  uint32 words = (bytes + 3) / 4;
+void EMU_CALL spu_dma(void *state, uint32_t core, void *mem, uint32_t mem_ofs, uint32_t mem_mask, uint32_t bytes, int iswrite) {
+  uint32_t words = (bytes + 3) / 4;
   mem_ofs &= (~3);
   if(iswrite) {
     while(words--) {
-      uint32 d;
+      uint32_t d;
       mem_ofs &= mem_mask;
-      d = *((uint32*)(((uint8*)mem)+mem_ofs));
+      d = *((uint32_t*)(((uint8_t*)mem)+mem_ofs));
       set_transfer(state, core, d      );
       set_transfer(state, core, d >> 16);
       mem_ofs += 4;
     }
   } else {
     while(words--) {
-      uint32 d;
+      uint32_t d;
       mem_ofs &= mem_mask;
-      d  = ((uint32)(get_transfer(state, core)))      ;
-      d |= ((uint32)(get_transfer(state, core))) << 16;
-      *((uint32*)(((uint8*)mem)+mem_ofs)) = d;
+      d  = ((uint32_t)(get_transfer(state, core)))      ;
+      d |= ((uint32_t)(get_transfer(state, core))) << 16;
+      *((uint32_t*)(((uint8_t*)mem)+mem_ofs)) = d;
       mem_ofs += 4;
     }
   }
@@ -197,26 +197,26 @@ void EMU_CALL spu_dma(void *state, uint32 core, void *mem, uint32 mem_ofs, uint3
   //SPUSTATE->mystery_dma[core] |= 0x80;
 }
 
-static uint16 EMU_CALL get_mystery_dma(struct SPU_STATE *state, uint32 core) {
-  uint16 m = state->mystery_dma[core];
+static uint16_t EMU_CALL get_mystery_dma(struct SPU_STATE *state, uint32_t core) {
+  uint16_t m = state->mystery_dma[core];
   state->mystery_dma[core] = 0;
   return m;
 }
 
-static void EMU_CALL set_mystery_dma(struct SPU_STATE *state, uint32 core, uint16 n) {
+static void EMU_CALL set_mystery_dma(struct SPU_STATE *state, uint32_t core, uint16_t n) {
 }
 
-static uint16 EMU_CALL get_ctrl(struct SPU_STATE *state, uint32 core) {
-  uint32 on            = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_ON));
-  uint32 main_enable   = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_MAIN_ENABLE));
-  uint32 noiseclock    = spucore_getreg(CORESTATE(core), SPUREG_NOISECLOCK) & 0x3F;
-  uint32 reverb_enable = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_REVERB_ENABLE));
-  uint32 irq_enable    = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_IRQ_ENABLE));
-  uint32 dmamode       = state->dma_mode[core] & 3;
-  uint32 er            = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_ER));
-  uint32 cr            = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_CR));
-  uint32 ee            = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_EE));
-  uint32 ce            = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_CE));
+static uint16_t EMU_CALL get_ctrl(struct SPU_STATE *state, uint32_t core) {
+  uint32_t on            = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_ON));
+  uint32_t main_enable   = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_MAIN_ENABLE));
+  uint32_t noiseclock    = spucore_getreg(CORESTATE(core), SPUREG_NOISECLOCK) & 0x3F;
+  uint32_t reverb_enable = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_REVERB_ENABLE));
+  uint32_t irq_enable    = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_IRQ_ENABLE));
+  uint32_t dmamode       = state->dma_mode[core] & 3;
+  uint32_t er            = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_ER));
+  uint32_t cr            = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_CR));
+  uint32_t ee            = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_EE));
+  uint32_t ce            = !!(spucore_getflag(CORESTATE(core), SPUREG_FLAG_CE));
   return (
     (on << 15) |
     (main_enable << 14) |
@@ -231,7 +231,7 @@ static uint16 EMU_CALL get_ctrl(struct SPU_STATE *state, uint32 core) {
   );
 }
 
-static void EMU_CALL set_ctrl(struct SPU_STATE *state, uint32 core, uint16 d) {
+static void EMU_CALL set_ctrl(struct SPU_STATE *state, uint32_t core, uint16_t d) {
   spucore_setflag(CORESTATE(core), SPUREG_FLAG_ON           , !!(d & (1<<15)));
   spucore_setflag(CORESTATE(core), SPUREG_FLAG_MAIN_ENABLE  , !!(d & (1<<14)));
   spucore_setreg (CORESTATE(core), SPUREG_NOISECLOCK, (d >> 8) & 0x3F, 0x3F);
@@ -244,8 +244,8 @@ static void EMU_CALL set_ctrl(struct SPU_STATE *state, uint32 core, uint16 d) {
   spucore_setflag(CORESTATE(core), SPUREG_FLAG_CE           , !!(d & (1<< 0)));
 }
 
-static uint16 EMU_CALL get_mmix(struct SPU_STATE *state, uint32 core) {
-  uint16 d = 0;
+static uint16_t EMU_CALL get_mmix(struct SPU_STATE *state, uint32_t core) {
+  uint16_t d = 0;
   if(spucore_getflag(CORESTATE(core), SPUREG_FLAG_MSNDL )) d |= (1<<11);
   if(spucore_getflag(CORESTATE(core), SPUREG_FLAG_MSNDR )) d |= (1<<10);
   if(spucore_getflag(CORESTATE(core), SPUREG_FLAG_MSNDEL)) d |= (1<< 9);
@@ -261,7 +261,7 @@ static uint16 EMU_CALL get_mmix(struct SPU_STATE *state, uint32 core) {
   return d;
 }
 
-static void EMU_CALL set_mmix(struct SPU_STATE *state, uint32 core, uint16 d) {
+static void EMU_CALL set_mmix(struct SPU_STATE *state, uint32_t core, uint16_t d) {
   spucore_setflag(CORESTATE(core), SPUREG_FLAG_MSNDL , (d >> 11) & 1);
   spucore_setflag(CORESTATE(core), SPUREG_FLAG_MSNDR , (d >> 10) & 1);
   spucore_setflag(CORESTATE(core), SPUREG_FLAG_MSNDEL, (d >>  9) & 1);
@@ -281,10 +281,10 @@ static void EMU_CALL set_mmix(struct SPU_STATE *state, uint32 core, uint16 d) {
 ** SPU1 register accesses: lh1/sh1
 */
 
-static uint16 EMU_CALL lh1(struct SPU_STATE *state, uint32 a) {
+static uint16_t EMU_CALL lh1(struct SPU_STATE *state, uint32_t a) {
   a &= 0x1FE;
   if(a < 0x180) {
-    uint32 voice = a >> 4;
+    uint32_t voice = a >> 4;
     switch(a & 0xE) {
     case 0x0: return spucore_getreg_voice(CORESTATE(0), voice, SPUREG_VOICE_VOLL );
     case 0x2: return spucore_getreg_voice(CORESTATE(0), voice, SPUREG_VOICE_VOLR );
@@ -368,19 +368,19 @@ static uint16 EMU_CALL lh1(struct SPU_STATE *state, uint32 a) {
   return 0;
 }
 
-static void EMU_CALL sh1(struct SPU_STATE *state, uint32 a, uint16 d) {
+static void EMU_CALL sh1(struct SPU_STATE *state, uint32_t a, uint16_t d) {
   a &= 0x1FE;
   if(a < 0x180) {
-    uint32 voice = a >> 4;
+    uint32_t voice = a >> 4;
     switch(a & 0xE) {
     case 0x0: spucore_setreg_voice(CORESTATE(0), voice, SPUREG_VOICE_VOLL , d, 0xFFFF); break;
     case 0x2: spucore_setreg_voice(CORESTATE(0), voice, SPUREG_VOICE_VOLR , d, 0xFFFF); break;
     case 0x4: spucore_setreg_voice(CORESTATE(0), voice, SPUREG_VOICE_PITCH, d, 0xFFFF); break;
-    case 0x6: spucore_setreg_voice(CORESTATE(0), voice, SPUREG_VOICE_SSA  , ((uint32)d) << 3, 0xFFFFFFFF); break;
+    case 0x6: spucore_setreg_voice(CORESTATE(0), voice, SPUREG_VOICE_SSA  , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
     case 0x8: spucore_setreg_voice(CORESTATE(0), voice, SPUREG_VOICE_ADSR1, d, 0xFFFF); break;
     case 0xA: spucore_setreg_voice(CORESTATE(0), voice, SPUREG_VOICE_ADSR2, d, 0xFFFF); break;
     case 0xC: spucore_setreg_voice(CORESTATE(0), voice, SPUREG_VOICE_ENVX , d, 0xFFFF); break;
-    case 0xE: spucore_setreg_voice(CORESTATE(0), voice, SPUREG_VOICE_LSAX , ((uint32)d) << 3, 0xFFFFFFFF); break;
+    case 0xE: spucore_setreg_voice(CORESTATE(0), voice, SPUREG_VOICE_LSAX , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
     }
   } else {
     switch(a) {
@@ -388,24 +388,24 @@ static void EMU_CALL sh1(struct SPU_STATE *state, uint32 a, uint16 d) {
     case 0x182: spucore_setreg  (CORESTATE(0), SPUREG_MVOLR, d, 0xFFFF); break;
     case 0x184: spucore_setreg  (CORESTATE(0), SPUREG_EVOLL, d, 0xFFFF); break;
     case 0x186: spucore_setreg  (CORESTATE(0), SPUREG_EVOLR, d, 0xFFFF); break;
-    case 0x188: spucore_setreg  (CORESTATE(0), SPUREG_KON  , ((uint32)d) <<  0, 0x0000FFFF); break;
-    case 0x18A: spucore_setreg  (CORESTATE(0), SPUREG_KON  , ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x18C: spucore_setreg  (CORESTATE(0), SPUREG_KOFF , ((uint32)d) <<  0, 0x0000FFFF); break;
-    case 0x18E: spucore_setreg  (CORESTATE(0), SPUREG_KOFF , ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x190: spucore_setreg  (CORESTATE(0), SPUREG_FM   , ((uint32)d) <<  0, 0x0000FFFF); break;
-    case 0x192: spucore_setreg  (CORESTATE(0), SPUREG_FM   , ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x194: spucore_setreg  (CORESTATE(0), SPUREG_NOISE, ((uint32)d) <<  0, 0x0000FFFF); break;
-    case 0x196: spucore_setreg  (CORESTATE(0), SPUREG_NOISE, ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x198: spucore_setreg  (CORESTATE(0), SPUREG_VMIXE, ((uint32)d) <<  0, 0x0000FFFF); break;
-    case 0x19A: spucore_setreg  (CORESTATE(0), SPUREG_VMIXE, ((uint32)d) << 16, 0xFFFF0000); break;
-//  case 0x19C: spucore_setreg  (CORESTATE(0), SPUREG_VMIX , ((uint32)d) <<  0, 0x0000FFFF); break;
-//  case 0x19E: spucore_setreg  (CORESTATE(0), SPUREG_VMIX , ((uint32)d) << 16, 0xFFFF0000); break;
+    case 0x188: spucore_setreg  (CORESTATE(0), SPUREG_KON  , ((uint32_t)d) <<  0, 0x0000FFFF); break;
+    case 0x18A: spucore_setreg  (CORESTATE(0), SPUREG_KON  , ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x18C: spucore_setreg  (CORESTATE(0), SPUREG_KOFF , ((uint32_t)d) <<  0, 0x0000FFFF); break;
+    case 0x18E: spucore_setreg  (CORESTATE(0), SPUREG_KOFF , ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x190: spucore_setreg  (CORESTATE(0), SPUREG_FM   , ((uint32_t)d) <<  0, 0x0000FFFF); break;
+    case 0x192: spucore_setreg  (CORESTATE(0), SPUREG_FM   , ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x194: spucore_setreg  (CORESTATE(0), SPUREG_NOISE, ((uint32_t)d) <<  0, 0x0000FFFF); break;
+    case 0x196: spucore_setreg  (CORESTATE(0), SPUREG_NOISE, ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x198: spucore_setreg  (CORESTATE(0), SPUREG_VMIXE, ((uint32_t)d) <<  0, 0x0000FFFF); break;
+    case 0x19A: spucore_setreg  (CORESTATE(0), SPUREG_VMIXE, ((uint32_t)d) << 16, 0xFFFF0000); break;
+//  case 0x19C: spucore_setreg  (CORESTATE(0), SPUREG_VMIX , ((uint32_t)d) <<  0, 0x0000FFFF); break;
+//  case 0x19E: spucore_setreg  (CORESTATE(0), SPUREG_VMIX , ((uint32_t)d) << 16, 0xFFFF0000); break;
     case 0x19C: break;
     case 0x19E: break;
     case 0x1A0: break;
-    case 0x1A2: spucore_setreg  (CORESTATE(0), SPUREG_ESA , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1A4: spucore_setreg  (CORESTATE(0), SPUREG_IRQA, ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1A6: set_tsa     (state, 0, ((uint32)d) << 3, 0xFFFFFFFF); break;
+    case 0x1A2: spucore_setreg  (CORESTATE(0), SPUREG_ESA , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1A4: spucore_setreg  (CORESTATE(0), SPUREG_IRQA, ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1A6: set_tsa     (state, 0, ((uint32_t)d) << 3, 0xFFFFFFFF); break;
     case 0x1A8: set_transfer(state, 0, d); break;
     case 0x1AA: set_ctrl    (state, 0, d); break;
     case 0x1AC: break; /* TODO: what does this reg do? */
@@ -418,38 +418,38 @@ static void EMU_CALL sh1(struct SPU_STATE *state, uint32 a, uint16 d) {
     case 0x1BA: break;
     case 0x1BC: break;
     case 0x1BE: break;
-    case 0x1C0: spucore_setreg(CORESTATE(0), SPUREG_REVERB_FB_SRC_A   , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1C2: spucore_setreg(CORESTATE(0), SPUREG_REVERB_FB_SRC_B   , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1C4: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_ALPHA  , ((uint32)d)     , 0x0000FFFF); break;
-    case 0x1C6: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_COEF_A , ((uint32)d)     , 0x0000FFFF); break;
-    case 0x1C8: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_COEF_B , ((uint32)d)     , 0x0000FFFF); break;
-    case 0x1CA: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_COEF_C , ((uint32)d)     , 0x0000FFFF); break;
-    case 0x1CC: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_COEF_D , ((uint32)d)     , 0x0000FFFF); break;
-    case 0x1CE: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_COEF   , ((uint32)d)     , 0x0000FFFF); break;
-    case 0x1D0: spucore_setreg(CORESTATE(0), SPUREG_REVERB_FB_ALPHA   , ((uint32)d)     , 0x0000FFFF); break;
-    case 0x1D2: spucore_setreg(CORESTATE(0), SPUREG_REVERB_FB_X       , ((uint32)d)     , 0x0000FFFF); break;
-    case 0x1D4: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_DEST_A0, ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1D6: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_DEST_A1, ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1D8: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_A0 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1DA: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_A1 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1DC: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_B0 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1DE: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_B1 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1E0: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_SRC_A0 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1E2: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_SRC_A1 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1E4: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_DEST_B0, ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1E6: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_DEST_B1, ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1E8: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_C0 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1EA: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_C1 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1EC: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_D0 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1EE: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_D1 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1F0: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_SRC_B1 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1F2: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_SRC_B0 , ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1F4: spucore_setreg(CORESTATE(0), SPUREG_REVERB_MIX_DEST_A0, ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1F6: spucore_setreg(CORESTATE(0), SPUREG_REVERB_MIX_DEST_A1, ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1F8: spucore_setreg(CORESTATE(0), SPUREG_REVERB_MIX_DEST_B0, ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1FA: spucore_setreg(CORESTATE(0), SPUREG_REVERB_MIX_DEST_B1, ((uint32)d) << 3, 0xFFFFFFFF); break;
-    case 0x1FC: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IN_COEF_L  , ((uint32)d)     , 0x0000FFFF); break;
-    case 0x1FE: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IN_COEF_R  , ((uint32)d)     , 0x0000FFFF); break;
+    case 0x1C0: spucore_setreg(CORESTATE(0), SPUREG_REVERB_FB_SRC_A   , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1C2: spucore_setreg(CORESTATE(0), SPUREG_REVERB_FB_SRC_B   , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1C4: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_ALPHA  , ((uint32_t)d)     , 0x0000FFFF); break;
+    case 0x1C6: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_COEF_A , ((uint32_t)d)     , 0x0000FFFF); break;
+    case 0x1C8: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_COEF_B , ((uint32_t)d)     , 0x0000FFFF); break;
+    case 0x1CA: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_COEF_C , ((uint32_t)d)     , 0x0000FFFF); break;
+    case 0x1CC: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_COEF_D , ((uint32_t)d)     , 0x0000FFFF); break;
+    case 0x1CE: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_COEF   , ((uint32_t)d)     , 0x0000FFFF); break;
+    case 0x1D0: spucore_setreg(CORESTATE(0), SPUREG_REVERB_FB_ALPHA   , ((uint32_t)d)     , 0x0000FFFF); break;
+    case 0x1D2: spucore_setreg(CORESTATE(0), SPUREG_REVERB_FB_X       , ((uint32_t)d)     , 0x0000FFFF); break;
+    case 0x1D4: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_DEST_A0, ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1D6: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_DEST_A1, ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1D8: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_A0 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1DA: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_A1 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1DC: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_B0 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1DE: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_B1 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1E0: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_SRC_A0 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1E2: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_SRC_A1 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1E4: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_DEST_B0, ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1E6: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_DEST_B1, ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1E8: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_C0 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1EA: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_C1 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1EC: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_D0 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1EE: spucore_setreg(CORESTATE(0), SPUREG_REVERB_ACC_SRC_D1 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1F0: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_SRC_B1 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1F2: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IIR_SRC_B0 , ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1F4: spucore_setreg(CORESTATE(0), SPUREG_REVERB_MIX_DEST_A0, ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1F6: spucore_setreg(CORESTATE(0), SPUREG_REVERB_MIX_DEST_A1, ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1F8: spucore_setreg(CORESTATE(0), SPUREG_REVERB_MIX_DEST_B0, ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1FA: spucore_setreg(CORESTATE(0), SPUREG_REVERB_MIX_DEST_B1, ((uint32_t)d) << 3, 0xFFFFFFFF); break;
+    case 0x1FC: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IN_COEF_L  , ((uint32_t)d)     , 0x0000FFFF); break;
+    case 0x1FE: spucore_setreg(CORESTATE(0), SPUREG_REVERB_IN_COEF_R  , ((uint32_t)d)     , 0x0000FFFF); break;
     }
   }
 }
@@ -463,7 +463,7 @@ static void EMU_CALL sh1(struct SPU_STATE *state, uint32 a, uint16 d) {
 ** Returns "normalized to core0" address
 ** Also sets *core to 0 or 1
 */
-static EMU_INLINE uint32 EMU_CALL spu2_reg_addr_normal(uint32 a, uint32 *core) {
+static EMU_INLINE uint32_t EMU_CALL spu2_reg_addr_normal(uint32_t a, uint32_t *core) {
   a &= 0x7FE;
   if(a < 0x400) { *core = 0; return a; }
   if(a < 0x760) { *core = 1; return a-0x400; }
@@ -472,10 +472,10 @@ static EMU_INLINE uint32 EMU_CALL spu2_reg_addr_normal(uint32 a, uint32 *core) {
   *core = 0; return a;
 }
 
-static uint16 EMU_CALL lh2(struct SPU_STATE *state, uint32 a) {
-  uint32 core = 0; a = spu2_reg_addr_normal(a, &core);
+static uint16_t EMU_CALL lh2(struct SPU_STATE *state, uint32_t a) {
+  uint32_t core = 0; a = spu2_reg_addr_normal(a, &core);
   if(a < 0x180) {
-    uint32 voice = a >> 4;
+    uint32_t voice = a >> 4;
     switch(a & 0xE) {
     case 0x0: return spucore_getreg_voice(CORESTATE(core), voice, SPUREG_VOICE_VOLL );
     case 0x2: return spucore_getreg_voice(CORESTATE(core), voice, SPUREG_VOICE_VOLR );
@@ -522,7 +522,7 @@ static uint16 EMU_CALL lh2(struct SPU_STATE *state, uint32 a) {
     case 0x1BE: return 0;
     }
   } else if(a < 0x2E0) {
-    uint32 voice = (a-0x1C0)/12;
+    uint32_t voice = (a-0x1C0)/12;
     switch((a-0x1C0)%12) {
     case 0x0: return spucore_getreg_voice(CORESTATE(core), voice, SPUREG_VOICE_SSA ) >> 17;
     case 0x2: return spucore_getreg_voice(CORESTATE(core), voice, SPUREG_VOICE_SSA ) >> 1;
@@ -609,10 +609,10 @@ static uint16 EMU_CALL lh2(struct SPU_STATE *state, uint32 a) {
   return 0;
 }
 
-static void EMU_CALL sh2(struct SPU_STATE *state, uint32 a, uint16 d) {
-  uint32 core = 0; a = spu2_reg_addr_normal(a, &core);
+static void EMU_CALL sh2(struct SPU_STATE *state, uint32_t a, uint16_t d) {
+  uint32_t core = 0; a = spu2_reg_addr_normal(a, &core);
   if(a < 0x180) {
-    uint32 voice = a >> 4;
+    uint32_t voice = a >> 4;
     switch(a & 0xE) {
     case 0x0: spucore_setreg_voice(CORESTATE(core), voice, SPUREG_VOICE_VOLL , d, 0xFFFF); break;
     case 0x2: spucore_setreg_voice(CORESTATE(core), voice, SPUREG_VOICE_VOLR , d, 0xFFFF); break;
@@ -625,28 +625,28 @@ static void EMU_CALL sh2(struct SPU_STATE *state, uint32 a, uint16 d) {
     }
   } else if(a < 0x1C0) {
     switch(a) {
-    case 0x180: spucore_setreg(CORESTATE(core), SPUREG_FM    , ((uint32)d)      , 0x0000FFFF); break;
-    case 0x182: spucore_setreg(CORESTATE(core), SPUREG_FM    , ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x184: spucore_setreg(CORESTATE(core), SPUREG_NOISE , ((uint32)d)      , 0x0000FFFF); break;
-    case 0x186: spucore_setreg(CORESTATE(core), SPUREG_NOISE , ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x188: spucore_setreg(CORESTATE(core), SPUREG_VMIXL , ((uint32)d)      , 0x0000FFFF); break;
-    case 0x18A: spucore_setreg(CORESTATE(core), SPUREG_VMIXL , ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x18C: spucore_setreg(CORESTATE(core), SPUREG_VMIXEL, ((uint32)d)      , 0x0000FFFF); break;
-    case 0x18E: spucore_setreg(CORESTATE(core), SPUREG_VMIXEL, ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x190: spucore_setreg(CORESTATE(core), SPUREG_VMIXR , ((uint32)d)      , 0x0000FFFF); break;
-    case 0x192: spucore_setreg(CORESTATE(core), SPUREG_VMIXR , ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x194: spucore_setreg(CORESTATE(core), SPUREG_VMIXER, ((uint32)d)      , 0x0000FFFF); break;
-    case 0x196: spucore_setreg(CORESTATE(core), SPUREG_VMIXER, ((uint32)d) << 16, 0xFFFF0000); break;
+    case 0x180: spucore_setreg(CORESTATE(core), SPUREG_FM    , ((uint32_t)d)      , 0x0000FFFF); break;
+    case 0x182: spucore_setreg(CORESTATE(core), SPUREG_FM    , ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x184: spucore_setreg(CORESTATE(core), SPUREG_NOISE , ((uint32_t)d)      , 0x0000FFFF); break;
+    case 0x186: spucore_setreg(CORESTATE(core), SPUREG_NOISE , ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x188: spucore_setreg(CORESTATE(core), SPUREG_VMIXL , ((uint32_t)d)      , 0x0000FFFF); break;
+    case 0x18A: spucore_setreg(CORESTATE(core), SPUREG_VMIXL , ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x18C: spucore_setreg(CORESTATE(core), SPUREG_VMIXEL, ((uint32_t)d)      , 0x0000FFFF); break;
+    case 0x18E: spucore_setreg(CORESTATE(core), SPUREG_VMIXEL, ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x190: spucore_setreg(CORESTATE(core), SPUREG_VMIXR , ((uint32_t)d)      , 0x0000FFFF); break;
+    case 0x192: spucore_setreg(CORESTATE(core), SPUREG_VMIXR , ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x194: spucore_setreg(CORESTATE(core), SPUREG_VMIXER, ((uint32_t)d)      , 0x0000FFFF); break;
+    case 0x196: spucore_setreg(CORESTATE(core), SPUREG_VMIXER, ((uint32_t)d) << 16, 0xFFFF0000); break;
     case 0x198: set_mmix(state, core, d); break;
     case 0x19A: set_ctrl(state, core, d); break;
-    case 0x19C: spucore_setreg(CORESTATE(core), SPUREG_IRQA, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x19E: spucore_setreg(CORESTATE(core), SPUREG_IRQA, ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x1A0: spucore_setreg(CORESTATE(core), SPUREG_KON , ((uint32)d)      , 0x0000FFFF); break;
-    case 0x1A2: spucore_setreg(CORESTATE(core), SPUREG_KON , ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x1A4: spucore_setreg(CORESTATE(core), SPUREG_KOFF, ((uint32)d)      , 0x0000FFFF); break;
-    case 0x1A6: spucore_setreg(CORESTATE(core), SPUREG_KOFF, ((uint32)d) << 16, 0xFFFF0000); break;
-    case 0x1A8: set_tsa(state, core, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x1AA: set_tsa(state, core, ((uint32)d) << 1 , 0x0001FFFF); break;
+    case 0x19C: spucore_setreg(CORESTATE(core), SPUREG_IRQA, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x19E: spucore_setreg(CORESTATE(core), SPUREG_IRQA, ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x1A0: spucore_setreg(CORESTATE(core), SPUREG_KON , ((uint32_t)d)      , 0x0000FFFF); break;
+    case 0x1A2: spucore_setreg(CORESTATE(core), SPUREG_KON , ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x1A4: spucore_setreg(CORESTATE(core), SPUREG_KOFF, ((uint32_t)d)      , 0x0000FFFF); break;
+    case 0x1A6: spucore_setreg(CORESTATE(core), SPUREG_KOFF, ((uint32_t)d) << 16, 0xFFFF0000); break;
+    case 0x1A8: set_tsa(state, core, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x1AA: set_tsa(state, core, ((uint32_t)d) << 1 , 0x0001FFFF); break;
     case 0x1AC: set_transfer(state, core, d); break;
     case 0x1AE: break; // do not know what this is yet but it may be important
     case 0x1B0: break; // do not know what this is yet but it may be important
@@ -659,67 +659,67 @@ static void EMU_CALL sh2(struct SPU_STATE *state, uint32 a, uint16 d) {
     case 0x1BE: break;
     }
   } else if(a < 0x2E0) {
-    uint32 voice = (a-0x1C0)/12;
+    uint32_t voice = (a-0x1C0)/12;
     switch((a-0x1C0)%12) {
-    case 0x0: spucore_setreg_voice(CORESTATE(core), voice, SPUREG_VOICE_SSA , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x2: spucore_setreg_voice(CORESTATE(core), voice, SPUREG_VOICE_SSA , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x4: spucore_setreg_voice(CORESTATE(core), voice, SPUREG_VOICE_LSAX, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x6: spucore_setreg_voice(CORESTATE(core), voice, SPUREG_VOICE_LSAX, ((uint32)d) << 1 , 0x0001FFFF); break;
+    case 0x0: spucore_setreg_voice(CORESTATE(core), voice, SPUREG_VOICE_SSA , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x2: spucore_setreg_voice(CORESTATE(core), voice, SPUREG_VOICE_SSA , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x4: spucore_setreg_voice(CORESTATE(core), voice, SPUREG_VOICE_LSAX, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x6: spucore_setreg_voice(CORESTATE(core), voice, SPUREG_VOICE_LSAX, ((uint32_t)d) << 1 , 0x0001FFFF); break;
     case 0x8: break; /* NAX is read-only */
     case 0xA: break; /* NAX is read-only */
     }
   } else {
     switch(a) {
-    case 0x2E0: spucore_setreg(CORESTATE(core), SPUREG_ESA               , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x2E2: spucore_setreg(CORESTATE(core), SPUREG_ESA               , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x2E4: spucore_setreg(CORESTATE(core), SPUREG_REVERB_FB_SRC_A   , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x2E6: spucore_setreg(CORESTATE(core), SPUREG_REVERB_FB_SRC_A   , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x2E8: spucore_setreg(CORESTATE(core), SPUREG_REVERB_FB_SRC_B   , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x2EA: spucore_setreg(CORESTATE(core), SPUREG_REVERB_FB_SRC_B   , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x2EC: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_A0, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x2EE: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_A0, ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x2F0: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_A1, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x2F2: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_A1, ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x2F4: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_A0 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x2F6: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_A0 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x2F8: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_A1 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x2FA: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_A1 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x2FC: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_B0 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x2FE: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_B0 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x300: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_B1 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x302: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_B1 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x304: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_A0 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x306: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_A0 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x308: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_A1 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x30A: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_A1 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x30C: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_B0, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x30E: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_B0, ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x310: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_B1, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x312: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_B1, ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x314: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_C0 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x316: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_C0 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x318: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_C1 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x31A: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_C1 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x31C: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_D0 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x31E: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_D0 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x320: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_D1 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x322: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_D1 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x324: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_B1 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x326: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_B1 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x328: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_B0 , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x32A: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_B0 , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x32C: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_A0, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x32E: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_A0, ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x330: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_A1, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x332: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_A1, ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x334: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_B0, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x336: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_B0, ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x338: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_B1, ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x33A: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_B1, ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x33C: spucore_setreg(CORESTATE(core), SPUREG_EEA               , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x33E: spucore_setreg(CORESTATE(core), SPUREG_EEA               , ((uint32)d) << 1 , 0x0001FFFF); break;
-    case 0x340: spucore_setreg(CORESTATE(core), SPUREG_EAX               , ((uint32)d) << 17, 0xFFFE0000); break;
-    case 0x342: spucore_setreg(CORESTATE(core), SPUREG_EAX               , ((uint32)d) << 1 , 0x0001FFFF); break;
+    case 0x2E0: spucore_setreg(CORESTATE(core), SPUREG_ESA               , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x2E2: spucore_setreg(CORESTATE(core), SPUREG_ESA               , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x2E4: spucore_setreg(CORESTATE(core), SPUREG_REVERB_FB_SRC_A   , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x2E6: spucore_setreg(CORESTATE(core), SPUREG_REVERB_FB_SRC_A   , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x2E8: spucore_setreg(CORESTATE(core), SPUREG_REVERB_FB_SRC_B   , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x2EA: spucore_setreg(CORESTATE(core), SPUREG_REVERB_FB_SRC_B   , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x2EC: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_A0, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x2EE: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_A0, ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x2F0: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_A1, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x2F2: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_A1, ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x2F4: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_A0 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x2F6: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_A0 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x2F8: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_A1 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x2FA: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_A1 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x2FC: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_B0 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x2FE: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_B0 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x300: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_B1 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x302: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_B1 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x304: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_A0 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x306: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_A0 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x308: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_A1 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x30A: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_A1 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x30C: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_B0, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x30E: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_B0, ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x310: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_B1, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x312: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_DEST_B1, ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x314: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_C0 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x316: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_C0 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x318: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_C1 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x31A: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_C1 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x31C: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_D0 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x31E: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_D0 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x320: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_D1 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x322: spucore_setreg(CORESTATE(core), SPUREG_REVERB_ACC_SRC_D1 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x324: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_B1 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x326: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_B1 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x328: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_B0 , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x32A: spucore_setreg(CORESTATE(core), SPUREG_REVERB_IIR_SRC_B0 , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x32C: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_A0, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x32E: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_A0, ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x330: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_A1, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x332: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_A1, ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x334: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_B0, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x336: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_B0, ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x338: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_B1, ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x33A: spucore_setreg(CORESTATE(core), SPUREG_REVERB_MIX_DEST_B1, ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x33C: spucore_setreg(CORESTATE(core), SPUREG_EEA               , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x33E: spucore_setreg(CORESTATE(core), SPUREG_EEA               , ((uint32_t)d) << 1 , 0x0001FFFF); break;
+    case 0x340: spucore_setreg(CORESTATE(core), SPUREG_EAX               , ((uint32_t)d) << 17, 0xFFFE0000); break;
+    case 0x342: spucore_setreg(CORESTATE(core), SPUREG_EAX               , ((uint32_t)d) << 1 , 0x0001FFFF); break;
     case 0x344: set_mystery_dma(state, core, d); break;
     case 0x760: spucore_setreg(CORESTATE(core), SPUREG_MVOLL, d, 0xFFFF); break;
     case 0x762: spucore_setreg(CORESTATE(core), SPUREG_MVOLR, d, 0xFFFF); break;
@@ -750,7 +750,7 @@ static void EMU_CALL sh2(struct SPU_STATE *state, uint32 a, uint16 d) {
 ** Externally-accessible lh/sh
 */
 
-uint16 EMU_CALL spu_lh(void *state, uint32 a) {
+uint16_t EMU_CALL spu_lh(void *state, uint32_t a) {
   if(SPUSTATE->samples_advance) {
     spu_flush(state);
   }
@@ -763,7 +763,7 @@ uint16 EMU_CALL spu_lh(void *state, uint32 a) {
   return 0;
 }
 
-void EMU_CALL spu_sh(void *state, uint32 a, uint16 d) {
+void EMU_CALL spu_sh(void *state, uint32_t a, uint16_t d) {
   if(SPUSTATE->samples_advance) {
     spu_flush(state);
   }
@@ -777,24 +777,24 @@ void EMU_CALL spu_sh(void *state, uint32 a, uint16 d) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void EMU_CALL spu_set_buffer(void *state, sint16 *buf, uint32 samples) {
+void EMU_CALL spu_set_buffer(void *state, int16_t *buf, uint32_t samples) {
   SPUSTATE->sample_buffer = buf;
   SPUSTATE->samples_remain = samples;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void EMU_CALL spu_advance(void *state, uint32 samples) {
+void EMU_CALL spu_advance(void *state, uint32_t samples) {
   SPUSTATE->samples_advance += samples;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 void EMU_CALL spu_flush(void *state) {
-  sint16 *buf = SPUSTATE->sample_buffer;
-  uint32 samples = SPUSTATE->samples_advance;
-  uint8 mainout = SPUSTATE->global_main_on;
-  uint8 effectout = SPUSTATE->global_effect_on;
+  int16_t *buf = SPUSTATE->sample_buffer;
+  uint32_t samples = SPUSTATE->samples_advance;
+  uint8_t mainout = SPUSTATE->global_main_on;
+  uint8_t effectout = SPUSTATE->global_effect_on;
 //  mainout = 0;
   if(SPUSTATE->version == 1) {
     spucore_render(CORESTATE(0), SPURAM, buf, NULL, samples, mainout, effectout);
@@ -810,10 +810,10 @@ void EMU_CALL spu_flush(void *state) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void EMU_CALL spu_render_ext(void *state, sint16 *buf, sint16 *ext, uint32 samples) {
+void EMU_CALL spu_render_ext(void *state, int16_t *buf, int16_t *ext, uint32_t samples) {
 
-  uint8 mainout = SPUSTATE->global_main_on;
-  uint8 effectout = SPUSTATE->global_effect_on;
+  uint8_t mainout = SPUSTATE->global_main_on;
+  uint8_t effectout = SPUSTATE->global_effect_on;
 //  mainout = 0;
   if(SPUSTATE->version == 1) {
     spucore_render(CORESTATE(0), SPURAM, buf, ext, samples, mainout, effectout);
@@ -826,12 +826,12 @@ void EMU_CALL spu_render_ext(void *state, sint16 *buf, sint16 *ext, uint32 sampl
 
 ////////////////////////////////////////////////////////////////////////////////
 
-uint32 EMU_CALL spu_cycles_until_interrupt(void *state, uint32 samples) {
+uint32_t EMU_CALL spu_cycles_until_interrupt(void *state, uint32_t samples) {
   if(SPUSTATE->version == 1) {
     return spucore_cycles_until_interrupt(CORESTATE(0), SPURAM, samples);
   } else {
-    uint32 cycles1 = spucore_cycles_until_interrupt(CORESTATE(0), SPURAM, samples);
-    uint32 cycles2 = spucore_cycles_until_interrupt(CORESTATE(1), SPURAM, samples);
+    uint32_t cycles1 = spucore_cycles_until_interrupt(CORESTATE(0), SPURAM, samples);
+    uint32_t cycles2 = spucore_cycles_until_interrupt(CORESTATE(1), SPURAM, samples);
     return cycles1 < cycles2 ? cycles1 : cycles2;
   }
 }

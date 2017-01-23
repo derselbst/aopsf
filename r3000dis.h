@@ -7,6 +7,8 @@
 #ifndef __PSX_R3000DIS_H__
 #define __PSX_R3000DIS_H__
 
+#include <stdint.h>
+
 #include "spu/emuconfig.h"
 
 #ifdef __cplusplus
@@ -21,7 +23,7 @@ extern "C" {
 // negative on failure
 // dest must have 256 bytes available
 //
-sint32 EMU_CALL r3000dis(char *dest, uint32 rich, uint32 pc, uint32 ins);
+int32_t EMU_CALL r3000dis(char *dest, uint32_t rich, uint32_t pc, uint32_t ins);
 
 /////////////////////////////////////////////////////////////////////////////
 

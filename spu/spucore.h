@@ -13,22 +13,22 @@
 extern "C" {
 #endif
 
-sint32 EMU_CALL spucore_init(void);
-uint32 EMU_CALL spucore_get_state_size(void);
+int32_t EMU_CALL spucore_init(void);
+uint32_t EMU_CALL spucore_get_state_size(void);
 void   EMU_CALL spucore_clear_state(void *state);
 
-void   EMU_CALL spucore_set_mem_size(void *state, uint32 size);
+void   EMU_CALL spucore_set_mem_size(void *state, uint32_t size);
 
-void   EMU_CALL spucore_render(void *state, uint16 *ram, sint16 *buf, sint16 *extinput, uint32 samples, uint8 mainout, uint8 effectout);
+void   EMU_CALL spucore_render(void *state, uint16_t *ram, int16_t *buf, int16_t *extinput, uint32_t samples, uint8_t mainout, uint8_t effectout);
 
-uint32 EMU_CALL spucore_getreg      (void *state, uint32 n);
-void   EMU_CALL spucore_setreg      (void *state, uint32 n, uint32 value, uint32 mask);
-uint32 EMU_CALL spucore_getreg_voice(void *state, uint32 voice, uint32 n);
-void   EMU_CALL spucore_setreg_voice(void *state, uint32 voice, uint32 n, uint32 value, uint32 mask);
-int    EMU_CALL spucore_getflag     (void *state, uint32 n);
-void   EMU_CALL spucore_setflag     (void *state, uint32 n, int value);
+uint32_t EMU_CALL spucore_getreg      (void *state, uint32_t n);
+void   EMU_CALL spucore_setreg      (void *state, uint32_t n, uint32_t value, uint32_t mask);
+uint32_t EMU_CALL spucore_getreg_voice(void *state, uint32_t voice, uint32_t n);
+void   EMU_CALL spucore_setreg_voice(void *state, uint32_t voice, uint32_t n, uint32_t value, uint32_t mask);
+int    EMU_CALL spucore_getflag     (void *state, uint32_t n);
+void   EMU_CALL spucore_setflag     (void *state, uint32_t n, int value);
 
-uint32 EMU_CALL spucore_cycles_until_interrupt(void *state, uint16 *ram, uint32 samples);
+uint32_t EMU_CALL spucore_cycles_until_interrupt(void *state, uint16_t *ram, uint32_t samples);
 
 /*
 ** Register definitions

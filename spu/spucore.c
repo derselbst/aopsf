@@ -32,7 +32,7 @@
 /*
 ** Static information
 */
-static const sint16 gauss_shuffled_reverse_table[1024] = {
+static const int16_t gauss_shuffled_reverse_table[1024] = {
  0x12c7, 0x59b3, 0x1307, 0xffff, 0x1288, 0x59b2, 0x1347, 0xffff, 0x1249, 0x59b0, 0x1388, 0xffff, 0x120b, 0x59ad, 0x13c9, 0xffff,
  0x11cd, 0x59a9, 0x140b, 0xffff, 0x118f, 0x59a4, 0x144d, 0xffff, 0x1153, 0x599e, 0x1490, 0xffff, 0x1116, 0x5997, 0x14d4, 0xffff,
  0x10db, 0x598f, 0x1517, 0xffff, 0x109f, 0x5986, 0x155c, 0xffff, 0x1065, 0x597c, 0x15a0, 0xffff, 0x102a, 0x5971, 0x15e6, 0xffff,
@@ -99,11 +99,11 @@ static const sint16 gauss_shuffled_reverse_table[1024] = {
  0xffff, 0x13c9, 0x59ad, 0x120b, 0xffff, 0x1388, 0x59b0, 0x1249, 0xffff, 0x1347, 0x59b2, 0x1288, 0xffff, 0x1307, 0x59b3, 0x12c7,
 };
 
-static sint32 ratelogtable[32+128];
+static int32_t ratelogtable[32+128];
 
 /*
 // v1.10 coefs - normalized from v1.04
-static const sint32 reverb_lowpass_coefs[8] = {
+static const int32_t reverb_lowpass_coefs[8] = {
   (int)((-0.036346113709214548)*(2048.0)),
   (int)(( 0.044484956332843419)*(2048.0)),
   (int)(( 0.183815456609675380)*(2048.0)),
@@ -118,7 +118,7 @@ static const sint32 reverb_lowpass_coefs[8] = {
 /*
 // test coefs - ganked from LAME's blackman function
 // (11-point filter, but only a few points were nonzero)
-static const sint32 reverb_new_lowpass_coefs[3] = {
+static const int32_t reverb_new_lowpass_coefs[3] = {
   (int)((-0.02134438446523164)*(2048.0)),
 // skip one
   (int)(( 0.27085135668587779)*(2048.0)),
@@ -130,7 +130,7 @@ static const sint32 reverb_new_lowpass_coefs[3] = {
 // PS1 reverb downsampling coefficients(as best as I could extract them at the moment, some of the even(non-zero/non-16384) ones *might* be off by 1.
 // -------------
 #if 1
-static const sint32 reverb_psx_lowpass_coefs[11] = {
+static const int32_t reverb_psx_lowpass_coefs[11] = {
    -1,
 //  0,
     2,
@@ -153,7 +153,7 @@ static const sint32 reverb_psx_lowpass_coefs[11] = {
 16384
 };
 #else
-static const sint32 reverb_psx_lowpass_coefs[48] = {
+static const int32_t reverb_psx_lowpass_coefs[48] = {
    -1,
     0,
     2,
@@ -220,10 +220,10 @@ static const int noisetable[] = {
 /*
 ** Static init
 */
-static uint32 spucore_initialized = 0;
+static uint32_t spucore_initialized = 0;
 
-sint32 EMU_CALL spucore_init(void) {
-  sint32 i;
+int32_t EMU_CALL spucore_init(void) {
+  int32_t i;
     
   if (spucore_initialized) return 0;
 
@@ -244,7 +244,7 @@ sint32 EMU_CALL spucore_init(void) {
   ratelogtable[32+2] = 6;
   ratelogtable[32+3] = 7;
   for(i = 4; i < 128; i++) {
-    uint32 n = 2*ratelogtable[32+i-4];
+    uint32_t n = 2*ratelogtable[32+i-4];
     if(n > 0x20000000) n = 0x20000000;
     ratelogtable[32+i] = n;
   }
@@ -265,15 +265,15 @@ sint32 EMU_CALL spucore_init(void) {
 #define SAMPLE_STATE_ON     (2)
 
 struct SPUCORE_SAMPLE {
-  uint8 state;
-  uint8 array_cleared;
-  sint32 array[32];
-  uint32 phase;
+  uint8_t state;
+  uint8_t array_cleared;
+  int32_t array[32];
+  uint32_t phase;
 
-  uint32 block_addr;
-  uint32 start_block_addr;
-  //uint32 start_loop_block_addr;
-  uint32 loop_block_addr;
+  uint32_t block_addr;
+  uint32_t start_block_addr;
+  //uint32_t start_loop_block_addr;
+  uint32_t loop_block_addr;
 };
 
 #define ENVELOPE_STATE_OFF     (0)
@@ -283,12 +283,12 @@ struct SPUCORE_SAMPLE {
 #define ENVELOPE_STATE_RELEASE (4)
 
 struct SPUCORE_ENVELOPE {
-  uint32 reg_ad;
-  uint32 reg_sr;
-  sint32 level;
-  sint32 delta;
+  uint32_t reg_ad;
+  uint32_t reg_sr;
+  int32_t level;
+  int32_t delta;
   int    state;
-  sint32 cachemax;
+  int32_t cachemax;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -296,11 +296,11 @@ struct SPUCORE_ENVELOPE {
 ** Volumes with increase/decrease modes
 */
 struct SPUCORE_VOLUME {
-  uint16 mode;
-  sint32 level;
+  uint16_t mode;
+  int32_t level;
 };
 
-static EMU_INLINE void EMU_CALL volume_setmode(struct SPUCORE_VOLUME *vol, uint16 mode) {
+static EMU_INLINE void EMU_CALL volume_setmode(struct SPUCORE_VOLUME *vol, uint16_t mode) {
   vol->mode = mode;
   if(mode & 0x8000) {
   } else {
@@ -310,11 +310,11 @@ static EMU_INLINE void EMU_CALL volume_setmode(struct SPUCORE_VOLUME *vol, uint1
   }
 }
 
-static EMU_INLINE uint16 EMU_CALL volume_getmode(struct SPUCORE_VOLUME *vol) {
+static EMU_INLINE uint16_t EMU_CALL volume_getmode(struct SPUCORE_VOLUME *vol) {
   return vol->mode;
 }
 
-static EMU_INLINE sint32 EMU_CALL volume_getlevel(struct SPUCORE_VOLUME *vol) {
+static EMU_INLINE int32_t EMU_CALL volume_getlevel(struct SPUCORE_VOLUME *vol) {
   return (vol->level) >> 15;
 }
 
@@ -322,7 +322,7 @@ static EMU_INLINE sint32 EMU_CALL volume_getlevel(struct SPUCORE_VOLUME *vol) {
 
 struct SPUCORE_CHAN {
   struct SPUCORE_VOLUME vol[2];
-  uint32 voice_pitch;
+  uint32_t voice_pitch;
   struct SPUCORE_SAMPLE   sample;
   struct SPUCORE_ENVELOPE env;
   int samples_until_pending_keyon;
@@ -332,88 +332,88 @@ struct SPUCORE_CHAN {
 ** Reverb resample state
 */
 struct SPUCORE_REVERB_RESAMPLER {
-  sint32  in_queue_l[64];
-  sint32  in_queue_r[64];
-  sint32 out_queue_l[16];
-  sint32 out_queue_r[16];
+  int32_t  in_queue_l[64];
+  int32_t  in_queue_r[64];
+  int32_t out_queue_l[16];
+  int32_t out_queue_r[16];
   int queue_index;
 };
 
 struct SPUCORE_REVERB {
-  uint32 FB_SRC_A   ;
-  uint32 FB_SRC_B   ;
-  uint16 IIR_ALPHA  ;
-  uint16 ACC_COEF_A ;
-  uint16 ACC_COEF_B ;
-  uint16 ACC_COEF_C ;
-  uint16 ACC_COEF_D ;
-  uint16 IIR_COEF   ;
-  uint16 FB_ALPHA   ;
-  uint16 FB_X       ;
-  uint32 IIR_DEST_A0;
-  uint32 IIR_DEST_A1;
-  uint32 ACC_SRC_A0 ;
-  uint32 ACC_SRC_A1 ;
-  uint32 ACC_SRC_B0 ;
-  uint32 ACC_SRC_B1 ;
-  uint32 IIR_SRC_A0 ;
-  uint32 IIR_SRC_A1 ;
-  uint32 IIR_DEST_B0;
-  uint32 IIR_DEST_B1;
-  uint32 ACC_SRC_C0 ;
-  uint32 ACC_SRC_C1 ;
-  uint32 ACC_SRC_D0 ;
-  uint32 ACC_SRC_D1 ;
-  uint32 IIR_SRC_B1 ;
-  uint32 IIR_SRC_B0 ;
-  uint32 MIX_DEST_A0;
-  uint32 MIX_DEST_A1;
-  uint32 MIX_DEST_B0;
-  uint32 MIX_DEST_B1;
-  uint16 IN_COEF_L  ;
-  uint16 IN_COEF_R  ;
+  uint32_t FB_SRC_A   ;
+  uint32_t FB_SRC_B   ;
+  uint16_t IIR_ALPHA  ;
+  uint16_t ACC_COEF_A ;
+  uint16_t ACC_COEF_B ;
+  uint16_t ACC_COEF_C ;
+  uint16_t ACC_COEF_D ;
+  uint16_t IIR_COEF   ;
+  uint16_t FB_ALPHA   ;
+  uint16_t FB_X       ;
+  uint32_t IIR_DEST_A0;
+  uint32_t IIR_DEST_A1;
+  uint32_t ACC_SRC_A0 ;
+  uint32_t ACC_SRC_A1 ;
+  uint32_t ACC_SRC_B0 ;
+  uint32_t ACC_SRC_B1 ;
+  uint32_t IIR_SRC_A0 ;
+  uint32_t IIR_SRC_A1 ;
+  uint32_t IIR_DEST_B0;
+  uint32_t IIR_DEST_B1;
+  uint32_t ACC_SRC_C0 ;
+  uint32_t ACC_SRC_C1 ;
+  uint32_t ACC_SRC_D0 ;
+  uint32_t ACC_SRC_D1 ;
+  uint32_t IIR_SRC_B1 ;
+  uint32_t IIR_SRC_B0 ;
+  uint32_t MIX_DEST_A0;
+  uint32_t MIX_DEST_A1;
+  uint32_t MIX_DEST_B0;
+  uint32_t MIX_DEST_B1;
+  uint16_t IN_COEF_L  ;
+  uint16_t IN_COEF_R  ;
 
-  uint32 start_address;
-  uint32 end_address;
+  uint32_t start_address;
+  uint32_t end_address;
 
-  sint32 current_address;
+  int32_t current_address;
 
-  sint32 safe_start_address;
-  sint32 safe_end_address;
-  sint32 safe_size;
+  int32_t safe_start_address;
+  int32_t safe_end_address;
+  int32_t safe_size;
 
   struct SPUCORE_REVERB_RESAMPLER resampler;
 };
 
 struct SPUCORE_STATE {
-  uint32 flags;
-  sint32 memsize;
+  uint32_t flags;
+  int32_t memsize;
   struct SPUCORE_CHAN chan[24];
   struct SPUCORE_REVERB reverb;
   struct SPUCORE_VOLUME mvol[2];
-  sint16 evol[2];
-  sint16 avol[2];
-  sint16 bvol[2];
-  uint32 kon;
-  uint32 koff;
-  uint32 fm;
-  uint32 noise;
-  uint32 vmix[2];
-  uint32 vmixe[2];
-  uint32 irq_address;
-  uint32 noiseclock;
-  uint32 noisecounter;
-  sint32 noiseval;
-  uint32 irq_decoder_clock;
-  uint32 irq_triggered_cycle;
+  int16_t evol[2];
+  int16_t avol[2];
+  int16_t bvol[2];
+  uint32_t kon;
+  uint32_t koff;
+  uint32_t fm;
+  uint32_t noise;
+  uint32_t vmix[2];
+  uint32_t vmixe[2];
+  uint32_t irq_address;
+  uint32_t noiseclock;
+  uint32_t noisecounter;
+  int32_t noiseval;
+  uint32_t irq_decoder_clock;
+  uint32_t irq_triggered_cycle;
 };
 
 struct SPUCORE_IRQ_STATE {
-  uint32 offset;
-  uint32 triggered_cycle;
+  uint32_t offset;
+  uint32_t triggered_cycle;
 };
 
-uint32 EMU_CALL spucore_get_state_size(void) {
+uint32_t EMU_CALL spucore_get_state_size(void) {
   return(sizeof(struct SPUCORE_STATE));
 }
 
@@ -440,8 +440,8 @@ void EMU_CALL spucore_clear_state(void *state) {
   SPUCORESTATE->irq_triggered_cycle = 0xFFFFFFFF;
 }
 
-void EMU_CALL spucore_set_mem_size(void *state, uint32 size) {
-  SPUCORESTATE->memsize = (sint32)size;
+void EMU_CALL spucore_set_mem_size(void *state, uint32_t size) {
+  SPUCORESTATE->memsize = (int32_t)size;
   spucore_setreg(state, SPUREG_EEA, size-1, 0xFFFFFFFF);
 }
 
@@ -449,8 +449,8 @@ void EMU_CALL spucore_set_mem_size(void *state, uint32 size) {
 
 static void EMU_CALL make_safe_reverb_addresses(struct SPUCORE_STATE *state) {
   struct SPUCORE_REVERB *r = &(state->reverb);
-  sint32 sa = r->start_address;
-  sint32 ea = r->end_address;
+  int32_t sa = r->start_address;
+  int32_t ea = r->end_address;
 
 //EMUTRACE2("[sa,ea=%X,%X]\n",sa,ea);
 
@@ -485,14 +485,14 @@ static void EMU_CALL make_safe_reverb_addresses(struct SPUCORE_STATE *state) {
 */
 /*
 #define SPUCORE_PREDICT_SKEL(prednum,coef1,coef2) \
-static void EMU_CALL spucore_predict_##prednum(uint8 *src, sint32 *dest, uint32 shift) {  \
-  uint32 i;                                                                               \
-  sint32 p_a = dest[-2];                                                                  \
-  sint32 p_b = dest[-1];                                                                  \
+static void EMU_CALL spucore_predict_##prednum(uint8_t *src, int32_t *dest, uint32_t shift) {  \
+  uint32_t i;                                                                               \
+  int32_t p_a = dest[-2];                                                                  \
+  int32_t p_b = dest[-1];                                                                  \
   shift += 16;                                                                            \
   for(i = 0; i < 14; i++) {                                                               \
-    sint32 a = src[i^(EMU_ENDIAN_XOR(1))];                                                \
-    sint32 b = (a&0xF0)<<24;                                                              \
+    int32_t a = src[i^(EMU_ENDIAN_XOR(1))];                                                \
+    int32_t b = (a&0xF0)<<24;                                                              \
     a = a << 28; b >>= shift; a >>= shift;                                                \
     a += ( ( ((coef1)*p_b) + ((coef2)*p_a) )+32)>>6;                                      \
     if(a > 32767) { a = 32767; } if(a < (-32768)) { a = (-32768); }                       \
@@ -506,16 +506,16 @@ static void EMU_CALL spucore_predict_##prednum(uint8 *src, sint32 *dest, uint32 
 */
 
 #define SPUCORE_PREDICT_SKEL(prednum,coef1,coef2) \
-static void EMU_CALL spucore_predict_##prednum(uint16 *src, sint32 *dest, uint32 shift) { \
-  uint32 i;                                                                               \
-  sint32 p_a = dest[-2];                                                                  \
-  sint32 p_b = dest[-1];                                                                  \
+static void EMU_CALL spucore_predict_##prednum(uint16_t *src, int32_t *dest, uint32_t shift) { \
+  uint32_t i;                                                                               \
+  int32_t p_a = dest[-2];                                                                  \
+  int32_t p_b = dest[-1];                                                                  \
   shift += 16;                                                                            \
   for(i = 0; i < 7; i++) {                                                                \
-    sint32 a = *src++;                                                                    \
-    sint32 b = (a&0x00F0)<<24;                                                            \
-    sint32 c = (a&0x0F00)<<20;                                                            \
-    sint32 d = (a&0xF000)<<16;                                                            \
+    int32_t a = *src++;                                                                    \
+    int32_t b = (a&0x00F0)<<24;                                                            \
+    int32_t c = (a&0x0F00)<<20;                                                            \
+    int32_t d = (a&0xF000)<<16;                                                            \
     a <<= 28;                                                                             \
     a >>= shift;                                                                          \
     b >>= shift;                                                                          \
@@ -543,7 +543,7 @@ SPUCORE_PREDICT_SKEL(2,115,-52)
 SPUCORE_PREDICT_SKEL(3,98,-55)
 SPUCORE_PREDICT_SKEL(4,122,-60)
 
-typedef void (EMU_CALL * spucore_predict_callback_t)(uint16*, sint32*, uint32);
+typedef void (EMU_CALL * spucore_predict_callback_t)(uint16_t*, int32_t*, uint32_t);
 
 static spucore_predict_callback_t spucore_predict[8] = {
   spucore_predict_0, spucore_predict_1, spucore_predict_2, spucore_predict_3,
@@ -551,12 +551,12 @@ static spucore_predict_callback_t spucore_predict[8] = {
 };
 
 static void EMU_CALL decode_sample_block(
-  uint16 *ram,
-  uint32 memmax,
+  uint16_t *ram,
+  uint32_t memmax,
   struct SPUCORE_SAMPLE *sample,
   int skip
 ) {
-//  uint32 i;
+//  uint32_t i;
   if(sample->state != SAMPLE_STATE_ON) {
     if(!sample->array_cleared) {
       memset(sample->array, 0, sizeof(sample->array));
@@ -614,18 +614,18 @@ static void EMU_CALL decode_sample_block(
 // output of resampler() is guaranteed clipped, as long as the output of
 // decode_sample_block() is
 //
-static uint32 EMU_CALL resampler(
-  uint16 *ram,
-  uint32 memmax,
+static uint32_t EMU_CALL resampler(
+  uint16_t *ram,
+  uint32_t memmax,
   struct SPUCORE_SAMPLE *sample,
-  sint32 *dest,
-  uint32 n,
-  uint32 phase_inc,
+  int32_t *dest,
+  uint32_t n,
+  uint32_t phase_inc,
   struct SPUCORE_IRQ_STATE *irq_state
 ) {
-  uint32 irq_triggered_cycle = 0xFFFFFFFF;
-  uint32 s;
-  uint32 ph; //, phl;
+  uint32_t irq_triggered_cycle = 0xFFFFFFFF;
+  uint32_t s;
+  uint32_t ph; //, phl;
   ph = sample->phase;
   if(!dest) {
     ph += phase_inc * n;
@@ -641,11 +641,11 @@ static uint32 EMU_CALL resampler(
     }
     s = n;
   } else {
-    uint32 t = 0;
+    uint32_t t = 0;
     for(s = 0; s < n; s++) {
-      sint32 *source_signal;
-      sint16 *mygauss;
-      sint32 sum;
+      int32_t *source_signal;
+      int16_t *mygauss;
+      int32_t sum;
       if(ph >= 0x1C000) {
         if(sample->state == SAMPLE_STATE_OFF) break;
         if(irq_state && irq_state->offset - sample->block_addr < 16 && irq_triggered_cycle == 0xFFFFFFFF) {
@@ -655,7 +655,7 @@ static uint32 EMU_CALL resampler(
         ph -= 0x1C000;
       }
       source_signal = sample->array + (ph >> 12);
-      mygauss = (sint16*) (((uint8*)gauss_shuffled_reverse_table) + ((ph & 0xFF0) >> 1));
+      mygauss = (int16_t*) (((uint8_t*)gauss_shuffled_reverse_table) + ((ph & 0xFF0) >> 1));
 
       { sum =
           (source_signal[0] * mygauss[0]) +
@@ -683,20 +683,20 @@ static uint32 EMU_CALL resampler(
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static uint32 EMU_CALL resampler_modulated(
-  uint16 *ram,
-  uint32 memmax,
+static uint32_t EMU_CALL resampler_modulated(
+  uint16_t *ram,
+  uint32_t memmax,
   struct SPUCORE_SAMPLE *sample,
-  sint32 *dest,
-  uint32 n,
-  uint32 phase_inc,
-  sint32 *fmbuf,
+  int32_t *dest,
+  uint32_t n,
+  uint32_t phase_inc,
+  int32_t *fmbuf,
   struct SPUCORE_IRQ_STATE *irq_state
 ) {
-  uint32 irq_triggered_cycle = 0xFFFFFFFF;
-  uint32 s, t = 0;
-  uint32 ph; //, phl;
-  uint32 pimod;
+  uint32_t irq_triggered_cycle = 0xFFFFFFFF;
+  uint32_t s, t = 0;
+  uint32_t ph; //, phl;
+  uint32_t pimod;
   ph = sample->phase;
   if(!dest) {
     for(s = 0; s < n; s++) {
@@ -716,9 +716,9 @@ static uint32 EMU_CALL resampler_modulated(
     }
   } else {
     for(s = 0; s < n; s++) {
-      sint32 *source_signal;
-      sint16 *mygauss;
-      sint32 sum;
+      int32_t *source_signal;
+      int16_t *mygauss;
+      int32_t sum;
       if(ph >= 0x1C000) {
         if(sample->state == SAMPLE_STATE_OFF) break;
         if(irq_state && irq_state->offset - sample->block_addr < 16 && irq_triggered_cycle == 0xFFFFFFFF) {
@@ -728,7 +728,7 @@ static uint32 EMU_CALL resampler_modulated(
         ph -= 0x1C000;
       }
       source_signal = sample->array + (ph >> 12);
-      mygauss = (sint16*) (((uint8*)gauss_shuffled_reverse_table) + ((ph & 0xFF0) >> 1));
+      mygauss = (int16_t*) (((uint8_t*)gauss_shuffled_reverse_table) + ((ph & 0xFF0) >> 1));
 
       { sum =
           (source_signal[0] * mygauss[0]) +
@@ -774,8 +774,8 @@ static uint32 EMU_CALL resampler_modulated(
 ** - Returns the max number of samples that can be processed at the current
 **   slope
 */
-static EMU_INLINE sint32 EMU_CALL envelope_do(struct SPUCORE_ENVELOPE *env) {
-  sint32 target = 0;
+static EMU_INLINE int32_t EMU_CALL envelope_do(struct SPUCORE_ENVELOPE *env) {
+  int32_t target = 0;
   /*
   ** Clip envelope value in case it wrapped around
   */
@@ -816,7 +816,7 @@ attack:
   goto domax;
 
 decay:
-  if((((env->level)>>27)&0xF) <= ((sint32)(MY_SL))) {
+  if((((env->level)>>27)&0xF) <= ((int32_t)(MY_SL))) {
     env->state = ENVELOPE_STATE_SUSTAIN;
     goto sustain;
   }
@@ -906,7 +906,7 @@ release:
   goto domax;
 
 domax:
-  { sint32 max;
+  { int32_t max;
     if(env->delta) {
       max = (target - (env->level)) / (env->delta);
     } else {
@@ -990,7 +990,7 @@ static void EMU_CALL voice_off(struct SPUCORE_CHAN *c) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static void EMU_CALL voices_on(struct SPUCORE_STATE *state, uint32 bits) {
+static void EMU_CALL voices_on(struct SPUCORE_STATE *state, uint32_t bits) {
   int a;
   for(a = 0; a < 24; a++) {
     if(bits & 1) {
@@ -1002,8 +1002,8 @@ static void EMU_CALL voices_on(struct SPUCORE_STATE *state, uint32 bits) {
 ////EMUTRACE2("[avol %08X %08X]",state->avol[0],state->avol[1]);
 //EMUTRACE2("[evol %08X %08X]",state->evol[0],state->evol[1]);
 
-//    sint32 extvol_l = ((sint16)(state->avol[0]));
-//    sint32 extvol_r = ((sint16)(state->avol[1]));
+//    int32_t extvol_l = ((int16_t)(state->avol[0]));
+//    int32_t extvol_r = ((int16_t)(state->avol[1]));
 
       voice_on(state->chan + a);
     }
@@ -1011,7 +1011,7 @@ static void EMU_CALL voices_on(struct SPUCORE_STATE *state, uint32 bits) {
   }
 }
 
-static void EMU_CALL voices_off(struct SPUCORE_STATE *state, uint32 bits) {
+static void EMU_CALL voices_off(struct SPUCORE_STATE *state, uint32_t bits) {
   int a;
   for(a = 0; a < 24; a++) {
     if(bits & 1) {
@@ -1032,12 +1032,12 @@ static void EMU_CALL voices_off(struct SPUCORE_STATE *state, uint32 bits) {
 */
 static int EMU_CALL enveloper(
   struct SPUCORE_ENVELOPE *env,
-  sint32 *buf,
+  int32_t *buf,
   int samples
 ) {
   int i = 0;
   while(i < samples) {
-    sint32 e, d, max;
+    int32_t e, d, max;
     if(env->state == ENVELOPE_STATE_OFF) break;
     max = env->cachemax;
     if(!max) {
@@ -1054,7 +1054,7 @@ static int EMU_CALL enveloper(
       e += max * d;
     } else {
       while(max--) {
-        sint32 b = buf[i];
+        int32_t b = buf[i];
         b *= (e >> 16);
         b >>= 15;
         buf[i] = b;
@@ -1081,12 +1081,12 @@ static int EMU_CALL enveloper(
 // resampler() and enveloper() are also
 //
 static int EMU_CALL render_channel_raw(
-  uint16 *ram,
-  uint32 memmax,
+  uint16_t *ram,
+  uint32_t memmax,
   struct SPUCORE_CHAN *c,
-  sint32 *buf,
-  sint32 *fmbuf,
-  sint32 *nbuf,
+  int32_t *buf,
+  int32_t *fmbuf,
+  int32_t *nbuf,
   int samples,
   struct SPUCORE_IRQ_STATE *irq_state
 ) {
@@ -1116,18 +1116,18 @@ static int EMU_CALL render_channel_raw(
 // render_channel_raw() is also
 //
 static int EMU_CALL render_channel_mono(
-  uint16 *ram,
-  uint32 memmax,
+  uint16_t *ram,
+  uint32_t memmax,
   struct SPUCORE_CHAN *c,
-  sint32 *buf,
-  sint32 *fmbuf,
-  sint32 *nbuf,
-  sint32 samples,
+  int32_t *buf,
+  int32_t *fmbuf,
+  int32_t *nbuf,
+  int32_t samples,
   struct SPUCORE_IRQ_STATE *irq_state
 ) {
-  sint32 n;
-  sint32 r, r2;
-  sint32 defer_remaining;
+  int32_t n;
+  int32_t r, r2;
+  int32_t defer_remaining;
   struct SPUCORE_IRQ_STATE spare_state;
 
 //top:
@@ -1155,7 +1155,7 @@ static int EMU_CALL render_channel_mono(
 
   defer_remaining = c->samples_until_pending_keyon;
   if(buf) {
-    sint32 i;
+    int32_t i;
     for(i = 0; i < r; i++) {
       (*buf) = ((*buf)*defer_remaining) / KEYON_DEFER_SAMPLES;
       buf++;
@@ -1210,13 +1210,13 @@ static int EMU_CALL render_channel_mono(
 
 static void EMU_CALL render_noise(
   struct SPUCORE_STATE *state,
-  sint32 *buf,
-  sint32 samples
+  int32_t *buf,
+  int32_t samples
 ) {
   int n;
-  uint32 noisecounter = state->noisecounter;
-  sint32 noiseval = state->noiseval;
-  uint32 noiseinc = (uint16)(0x8000 >> (state->noiseclock << 6));
+  uint32_t noisecounter = state->noisecounter;
+  int32_t noiseval = state->noiseval;
+  uint32_t noiseinc = (uint16_t)(0x8000 >> (state->noiseclock << 6));
   for(n = 0; n < samples; n++) {
     noisecounter += noiseinc;
     noiseval += noisecounter + noisecounter + noisetable[(noisecounter >> 10) & 63];
@@ -1230,12 +1230,12 @@ static void EMU_CALL render_noise(
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#define MAKE_SINT32_COEF(x)   ((sint32)((sint16)(state->reverb.x)))
+#define MAKE_int32_t_COEF(x)   ((int32_t)((int16_t)(state->reverb.x)))
 #define MAKE_REVERB_OFFSET(x) (state->reverb.x)
 #define NORMALIZE_REVERB_OFFSET(x) {while(x>=state->reverb.safe_end_address){x-=state->reverb.safe_size;}while(x<state->reverb.safe_start_address){x+=state->reverb.safe_size;}}
 
-#define RAM_PCM_SAMPLE(x) (*((sint16*)(((uint8*)ram) + (x))))
-#define RAM_SINT32_SAMPLE(x) ((sint32)(RAM_PCM_SAMPLE(x)))
+#define RAM_PCM_SAMPLE(x) (*((int16_t*)(((uint8_t*)ram) + (x))))
+#define RAM_int32_t_SAMPLE(x) ((int32_t)(RAM_PCM_SAMPLE(x)))
 /*
 ** Multiplying -32768 by -32768 and scaling by 15 bits is not safe
 ** (the sign would get flipped)
@@ -1253,78 +1253,78 @@ static void EMU_CALL render_noise(
 /*
 ** 22KHz reverb steady state step
 */
-static void EMU_CALL reverb_steadystate22(struct SPUCORE_STATE *state, uint16 *ram, sint32 input_l, sint32 input_r) {
+static void EMU_CALL reverb_steadystate22(struct SPUCORE_STATE *state, uint16_t *ram, int32_t input_l, int32_t input_r) {
   /*
   ** Current reverb offset
   */
-  sint32 current     = state->reverb.current_address;
+  int32_t current     = state->reverb.current_address;
   /*
   ** Reverb registers
   */
-  sint32 fb_src_a    = MAKE_REVERB_OFFSET(FB_SRC_A);
-  sint32 fb_src_b    = MAKE_REVERB_OFFSET(FB_SRC_B);
-  sint32 iir_alpha   = MAKE_SINT32_COEF(IIR_ALPHA);
-  sint32 acc_coef_a  = MAKE_SINT32_COEF(ACC_COEF_A);
-  sint32 acc_coef_b  = MAKE_SINT32_COEF(ACC_COEF_B);
-  sint32 acc_coef_c  = MAKE_SINT32_COEF(ACC_COEF_C);
-  sint32 acc_coef_d  = MAKE_SINT32_COEF(ACC_COEF_D);
-  sint32 iir_coef    = MAKE_SINT32_COEF(IIR_COEF);
-  sint32 fb_alpha    = MAKE_SINT32_COEF(FB_ALPHA);
-  sint32 fb_x        = MAKE_SINT32_COEF(FB_X);
-  sint32 iir_dest_a0 = MAKE_REVERB_OFFSET(IIR_DEST_A0);
-  sint32 iir_dest_a1 = MAKE_REVERB_OFFSET(IIR_DEST_A1);
-  sint32 acc_src_a0  = MAKE_REVERB_OFFSET(ACC_SRC_A0);
-  sint32 acc_src_a1  = MAKE_REVERB_OFFSET(ACC_SRC_A1);
-  sint32 acc_src_b0  = MAKE_REVERB_OFFSET(ACC_SRC_B0);
-  sint32 acc_src_b1  = MAKE_REVERB_OFFSET(ACC_SRC_B1);
-  sint32 iir_src_a0  = MAKE_REVERB_OFFSET(IIR_SRC_A0);
-  sint32 iir_src_a1  = MAKE_REVERB_OFFSET(IIR_SRC_A1);
-  sint32 iir_dest_b0 = MAKE_REVERB_OFFSET(IIR_DEST_B0);
-  sint32 iir_dest_b1 = MAKE_REVERB_OFFSET(IIR_DEST_B1);
-  sint32 acc_src_c0  = MAKE_REVERB_OFFSET(ACC_SRC_C0);
-  sint32 acc_src_c1  = MAKE_REVERB_OFFSET(ACC_SRC_C1);
-  sint32 acc_src_d0  = MAKE_REVERB_OFFSET(ACC_SRC_D0);
-  sint32 acc_src_d1  = MAKE_REVERB_OFFSET(ACC_SRC_D1);
-  sint32 iir_src_b1  = MAKE_REVERB_OFFSET(IIR_SRC_B1);
-  sint32 iir_src_b0  = MAKE_REVERB_OFFSET(IIR_SRC_B0);
-  sint32 mix_dest_a0 = MAKE_REVERB_OFFSET(MIX_DEST_A0);
-  sint32 mix_dest_a1 = MAKE_REVERB_OFFSET(MIX_DEST_A1);
-  sint32 mix_dest_b0 = MAKE_REVERB_OFFSET(MIX_DEST_B0);
-  sint32 mix_dest_b1 = MAKE_REVERB_OFFSET(MIX_DEST_B1);
-  sint32 in_coef_l   = MAKE_SINT32_COEF(IN_COEF_L);
-  sint32 in_coef_r   = MAKE_SINT32_COEF(IN_COEF_R);
+  int32_t fb_src_a    = MAKE_REVERB_OFFSET(FB_SRC_A);
+  int32_t fb_src_b    = MAKE_REVERB_OFFSET(FB_SRC_B);
+  int32_t iir_alpha   = MAKE_int32_t_COEF(IIR_ALPHA);
+  int32_t acc_coef_a  = MAKE_int32_t_COEF(ACC_COEF_A);
+  int32_t acc_coef_b  = MAKE_int32_t_COEF(ACC_COEF_B);
+  int32_t acc_coef_c  = MAKE_int32_t_COEF(ACC_COEF_C);
+  int32_t acc_coef_d  = MAKE_int32_t_COEF(ACC_COEF_D);
+  int32_t iir_coef    = MAKE_int32_t_COEF(IIR_COEF);
+  int32_t fb_alpha    = MAKE_int32_t_COEF(FB_ALPHA);
+  int32_t fb_x        = MAKE_int32_t_COEF(FB_X);
+  int32_t iir_dest_a0 = MAKE_REVERB_OFFSET(IIR_DEST_A0);
+  int32_t iir_dest_a1 = MAKE_REVERB_OFFSET(IIR_DEST_A1);
+  int32_t acc_src_a0  = MAKE_REVERB_OFFSET(ACC_SRC_A0);
+  int32_t acc_src_a1  = MAKE_REVERB_OFFSET(ACC_SRC_A1);
+  int32_t acc_src_b0  = MAKE_REVERB_OFFSET(ACC_SRC_B0);
+  int32_t acc_src_b1  = MAKE_REVERB_OFFSET(ACC_SRC_B1);
+  int32_t iir_src_a0  = MAKE_REVERB_OFFSET(IIR_SRC_A0);
+  int32_t iir_src_a1  = MAKE_REVERB_OFFSET(IIR_SRC_A1);
+  int32_t iir_dest_b0 = MAKE_REVERB_OFFSET(IIR_DEST_B0);
+  int32_t iir_dest_b1 = MAKE_REVERB_OFFSET(IIR_DEST_B1);
+  int32_t acc_src_c0  = MAKE_REVERB_OFFSET(ACC_SRC_C0);
+  int32_t acc_src_c1  = MAKE_REVERB_OFFSET(ACC_SRC_C1);
+  int32_t acc_src_d0  = MAKE_REVERB_OFFSET(ACC_SRC_D0);
+  int32_t acc_src_d1  = MAKE_REVERB_OFFSET(ACC_SRC_D1);
+  int32_t iir_src_b1  = MAKE_REVERB_OFFSET(IIR_SRC_B1);
+  int32_t iir_src_b0  = MAKE_REVERB_OFFSET(IIR_SRC_B0);
+  int32_t mix_dest_a0 = MAKE_REVERB_OFFSET(MIX_DEST_A0);
+  int32_t mix_dest_a1 = MAKE_REVERB_OFFSET(MIX_DEST_A1);
+  int32_t mix_dest_b0 = MAKE_REVERB_OFFSET(MIX_DEST_B0);
+  int32_t mix_dest_b1 = MAKE_REVERB_OFFSET(MIX_DEST_B1);
+  int32_t in_coef_l   = MAKE_int32_t_COEF(IN_COEF_L);
+  int32_t in_coef_r   = MAKE_int32_t_COEF(IN_COEF_R);
   /*
   ** Alternate buffer positions
   */
-  sint32 fb_src_a0;
-  sint32 fb_src_a1;
-  sint32 fb_src_b0;
-  sint32 fb_src_b1;
-  sint32 iir_dest_a0_plus;
-  sint32 iir_dest_a1_plus;
-  sint32 iir_dest_b0_plus;
-  sint32 iir_dest_b1_plus;
+  int32_t fb_src_a0;
+  int32_t fb_src_a1;
+  int32_t fb_src_b0;
+  int32_t fb_src_b1;
+  int32_t iir_dest_a0_plus;
+  int32_t iir_dest_a1_plus;
+  int32_t iir_dest_b0_plus;
+  int32_t iir_dest_b1_plus;
   /*
   ** Intermediate results
   */
-  sint32 acc0;
-  sint32 acc1;
-  sint32 iir_input_a0;
-  sint32 iir_input_a1;
-  sint32 iir_input_b0;
-  sint32 iir_input_b1;
-  sint32 iir_a0;
-  sint32 iir_a1;
-  sint32 iir_b0;
-  sint32 iir_b1;
-  sint32 fb_a0;
-  sint32 fb_a1;
-  sint32 fb_b0;
-  sint32 fb_b1;
-  sint32 mix_a0;
-  sint32 mix_a1;
-  sint32 mix_b0;
-  sint32 mix_b1;
+  int32_t acc0;
+  int32_t acc1;
+  int32_t iir_input_a0;
+  int32_t iir_input_a1;
+  int32_t iir_input_b0;
+  int32_t iir_input_b1;
+  int32_t iir_a0;
+  int32_t iir_a1;
+  int32_t iir_b0;
+  int32_t iir_b1;
+  int32_t fb_a0;
+  int32_t fb_a1;
+  int32_t fb_b0;
+  int32_t fb_b1;
+  int32_t mix_a0;
+  int32_t mix_a1;
+  int32_t mix_b0;
+  int32_t mix_b1;
 
   /*
   ** Offsets
@@ -1365,15 +1365,15 @@ static void EMU_CALL reverb_steadystate22(struct SPUCORE_STATE *state, uint16 *r
   input_l *= in_coef_l;
   input_r *= in_coef_r;
 #define OPPOSITE_IIR_ALPHA (32768-iir_alpha)
-  iir_input_a0 = ((RAM_SINT32_SAMPLE(iir_src_a0) * iir_coef) + input_l) >> 15;
-  iir_input_a1 = ((RAM_SINT32_SAMPLE(iir_src_a1) * iir_coef) + input_r) >> 15;
-  iir_input_b0 = ((RAM_SINT32_SAMPLE(iir_src_b0) * iir_coef) + input_l) >> 15;
-  iir_input_b1 = ((RAM_SINT32_SAMPLE(iir_src_b1) * iir_coef) + input_r) >> 15;
+  iir_input_a0 = ((RAM_int32_t_SAMPLE(iir_src_a0) * iir_coef) + input_l) >> 15;
+  iir_input_a1 = ((RAM_int32_t_SAMPLE(iir_src_a1) * iir_coef) + input_r) >> 15;
+  iir_input_b0 = ((RAM_int32_t_SAMPLE(iir_src_b0) * iir_coef) + input_l) >> 15;
+  iir_input_b1 = ((RAM_int32_t_SAMPLE(iir_src_b1) * iir_coef) + input_r) >> 15;
   CLIP_PCM_4(iir_input_a0,iir_input_a1,iir_input_b0,iir_input_b1);
-  iir_a0 = ((iir_input_a0 * iir_alpha) + (RAM_SINT32_SAMPLE(iir_dest_a0) * (OPPOSITE_IIR_ALPHA))) >> 15;
-  iir_a1 = ((iir_input_a1 * iir_alpha) + (RAM_SINT32_SAMPLE(iir_dest_a1) * (OPPOSITE_IIR_ALPHA))) >> 15;
-  iir_b0 = ((iir_input_b0 * iir_alpha) + (RAM_SINT32_SAMPLE(iir_dest_b0) * (OPPOSITE_IIR_ALPHA))) >> 15;
-  iir_b1 = ((iir_input_b1 * iir_alpha) + (RAM_SINT32_SAMPLE(iir_dest_b1) * (OPPOSITE_IIR_ALPHA))) >> 15;
+  iir_a0 = ((iir_input_a0 * iir_alpha) + (RAM_int32_t_SAMPLE(iir_dest_a0) * (OPPOSITE_IIR_ALPHA))) >> 15;
+  iir_a1 = ((iir_input_a1 * iir_alpha) + (RAM_int32_t_SAMPLE(iir_dest_a1) * (OPPOSITE_IIR_ALPHA))) >> 15;
+  iir_b0 = ((iir_input_b0 * iir_alpha) + (RAM_int32_t_SAMPLE(iir_dest_b0) * (OPPOSITE_IIR_ALPHA))) >> 15;
+  iir_b1 = ((iir_input_b1 * iir_alpha) + (RAM_int32_t_SAMPLE(iir_dest_b1) * (OPPOSITE_IIR_ALPHA))) >> 15;
   CLIP_PCM_4(iir_a0,iir_a1,iir_b0,iir_b1);
 
   RAM_PCM_SAMPLE(iir_dest_a0_plus) = iir_a0;
@@ -1385,30 +1385,30 @@ static void EMU_CALL reverb_steadystate22(struct SPUCORE_STATE *state, uint16 *r
   ** Accumulators
   */
   acc0 =
-    ((RAM_SINT32_SAMPLE(acc_src_a0) * acc_coef_a) >> 15) +
-    ((RAM_SINT32_SAMPLE(acc_src_b0) * acc_coef_b) >> 15) +
-    ((RAM_SINT32_SAMPLE(acc_src_c0) * acc_coef_c) >> 15) +
-    ((RAM_SINT32_SAMPLE(acc_src_d0) * acc_coef_d) >> 15);
+    ((RAM_int32_t_SAMPLE(acc_src_a0) * acc_coef_a) >> 15) +
+    ((RAM_int32_t_SAMPLE(acc_src_b0) * acc_coef_b) >> 15) +
+    ((RAM_int32_t_SAMPLE(acc_src_c0) * acc_coef_c) >> 15) +
+    ((RAM_int32_t_SAMPLE(acc_src_d0) * acc_coef_d) >> 15);
   acc1 =
-    ((RAM_SINT32_SAMPLE(acc_src_a1) * acc_coef_a) >> 15) +
-    ((RAM_SINT32_SAMPLE(acc_src_b1) * acc_coef_b) >> 15) +
-    ((RAM_SINT32_SAMPLE(acc_src_c1) * acc_coef_c) >> 15) +
-    ((RAM_SINT32_SAMPLE(acc_src_d1) * acc_coef_d) >> 15);
+    ((RAM_int32_t_SAMPLE(acc_src_a1) * acc_coef_a) >> 15) +
+    ((RAM_int32_t_SAMPLE(acc_src_b1) * acc_coef_b) >> 15) +
+    ((RAM_int32_t_SAMPLE(acc_src_c1) * acc_coef_c) >> 15) +
+    ((RAM_int32_t_SAMPLE(acc_src_d1) * acc_coef_d) >> 15);
   CLIP_PCM_2(acc0,acc1);
 
   /*
   ** Feedback
   */
-  fb_a0 = RAM_SINT32_SAMPLE(fb_src_a0);
-  fb_a1 = RAM_SINT32_SAMPLE(fb_src_a1);
-  fb_b0 = RAM_SINT32_SAMPLE(fb_src_b0);
-  fb_b1 = RAM_SINT32_SAMPLE(fb_src_b1);
+  fb_a0 = RAM_int32_t_SAMPLE(fb_src_a0);
+  fb_a1 = RAM_int32_t_SAMPLE(fb_src_a1);
+  fb_b0 = RAM_int32_t_SAMPLE(fb_src_b0);
+  fb_b1 = RAM_int32_t_SAMPLE(fb_src_b1);
 
   mix_a0 = acc0 - ((fb_a0*fb_alpha)>>15);
   mix_a1 = acc1 - ((fb_a1*fb_alpha)>>15);
   mix_b0 = fb_alpha*acc0;
   mix_b1 = fb_alpha*acc1;
-  fb_alpha = ((sint32)((sint16)(((sint16)fb_alpha)^0x8000)));
+  fb_alpha = ((int32_t)((int16_t)(((int16_t)fb_alpha)^0x8000)));
   mix_b0 -= fb_a0*fb_alpha;
   mix_b1 -= fb_a1*fb_alpha;
   mix_b0 -= fb_b0*fb_x;
@@ -1428,15 +1428,15 @@ static void EMU_CALL reverb_steadystate22(struct SPUCORE_STATE *state, uint16 *r
 /*
 ** 22KHz reverb engine
 */
-static void EMU_CALL reverb_engine22(struct SPUCORE_STATE *state, uint16 *ram, sint32 *l, sint32 *r) {
-  sint32 input_l = *l;
-  sint32 input_r = *r;
-  sint32 output_l;
-  sint32 output_r;
-  sint32 mix_dest_a0 = state->reverb.current_address + MAKE_REVERB_OFFSET(MIX_DEST_A0);
-  sint32 mix_dest_a1 = state->reverb.current_address + MAKE_REVERB_OFFSET(MIX_DEST_A1);
-  sint32 mix_dest_b0 = state->reverb.current_address + MAKE_REVERB_OFFSET(MIX_DEST_B0);
-  sint32 mix_dest_b1 = state->reverb.current_address + MAKE_REVERB_OFFSET(MIX_DEST_B1);
+static void EMU_CALL reverb_engine22(struct SPUCORE_STATE *state, uint16_t *ram, int32_t *l, int32_t *r) {
+  int32_t input_l = *l;
+  int32_t input_r = *r;
+  int32_t output_l;
+  int32_t output_r;
+  int32_t mix_dest_a0 = state->reverb.current_address + MAKE_REVERB_OFFSET(MIX_DEST_A0);
+  int32_t mix_dest_a1 = state->reverb.current_address + MAKE_REVERB_OFFSET(MIX_DEST_A1);
+  int32_t mix_dest_b0 = state->reverb.current_address + MAKE_REVERB_OFFSET(MIX_DEST_B0);
+  int32_t mix_dest_b1 = state->reverb.current_address + MAKE_REVERB_OFFSET(MIX_DEST_B1);
   NORMALIZE_REVERB_OFFSET(mix_dest_a0);
   NORMALIZE_REVERB_OFFSET(mix_dest_a1);
   NORMALIZE_REVERB_OFFSET(mix_dest_b0);
@@ -1462,10 +1462,10 @@ static void EMU_CALL reverb_engine22(struct SPUCORE_STATE *state, uint16 *ram, s
   ** (pretty certain this is done AFTER the steady state step)
   */
   {
-    int al = RAM_SINT32_SAMPLE(mix_dest_a0);
-    int ar = RAM_SINT32_SAMPLE(mix_dest_a1);
-    int bl = RAM_SINT32_SAMPLE(mix_dest_b0);
-    int br = RAM_SINT32_SAMPLE(mix_dest_b1);
+    int al = RAM_int32_t_SAMPLE(mix_dest_a0);
+    int ar = RAM_int32_t_SAMPLE(mix_dest_a1);
+    int bl = RAM_int32_t_SAMPLE(mix_dest_b0);
+    int br = RAM_int32_t_SAMPLE(mix_dest_b1);
 
     output_l = al + bl;
     output_r = ar + br;
@@ -1485,7 +1485,7 @@ static void EMU_CALL reverb_engine22(struct SPUCORE_STATE *state, uint16 *ram, s
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static void EMU_CALL reverb_process(struct SPUCORE_STATE *state, uint16 *ram, sint32 *buf, int samples) {
+static void EMU_CALL reverb_process(struct SPUCORE_STATE *state, uint16_t *ram, int32_t *buf, int samples) {
   int q = state->reverb.resampler.queue_index;
   /*
   ** Sample loop
@@ -1494,8 +1494,8 @@ static void EMU_CALL reverb_process(struct SPUCORE_STATE *state, uint16 *ram, si
     /*
     ** Get an input sample
     */
-    sint32 l = buf[0];
-    sint32 r = buf[1];
+    int32_t l = buf[0];
+    int32_t r = buf[1];
     /*
     ** Put it in the input queue
     */
@@ -1671,24 +1671,24 @@ static void EMU_CALL reverb_process(struct SPUCORE_STATE *state, uint16 *ram, si
 /*
 ** Renderer
 */
-static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *buf, sint16 *extinput, sint32 samples, uint8 mainout, uint8 effectout) {
-  uint32 chanbit;
-  uint32 maskmain_l;
-  uint32 maskmain_r;
-  uint32 maskverb_l;
-  uint32 maskverb_r;
-  uint32 masknoise;
-  uint32 maskfm;
-  sint32 ibuf   [  RENDERMAX];
-  sint32 ibufmix[2*RENDERMAX];
-  sint32 ibufrvb[2*RENDERMAX];
-  sint32 ibufn  [  RENDERMAX];
-  sint32 ibuffm [  RENDERMAX];
+static void EMU_CALL render(struct SPUCORE_STATE *state, uint16_t *ram, int16_t *buf, int16_t *extinput, int32_t samples, uint8_t mainout, uint8_t effectout) {
+  uint32_t chanbit;
+  uint32_t maskmain_l;
+  uint32_t maskmain_r;
+  uint32_t maskverb_l;
+  uint32_t maskverb_r;
+  uint32_t masknoise;
+  uint32_t maskfm;
+  int32_t ibuf   [  RENDERMAX];
+  int32_t ibufmix[2*RENDERMAX];
+  int32_t ibufrvb[2*RENDERMAX];
+  int32_t ibufn  [  RENDERMAX];
+  int32_t ibuffm [  RENDERMAX];
   int ch, i;
-  sint32 m_v_l;
-  sint32 m_v_r;
-  sint32 r_v_l;
-  sint32 r_v_r;
+  int32_t m_v_l;
+  int32_t m_v_r;
+  int32_t r_v_l;
+  int32_t r_v_r;
   struct SPUCORE_IRQ_STATE irq_state;
   struct SPUCORE_IRQ_STATE *irq_state_ptr;
 
@@ -1698,10 +1698,10 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
   irq_state.triggered_cycle = 0xFFFFFFFF;
   if (state->flags & SPUREG_FLAG_IRQ_ENABLE) {
     if (state->memsize == 0x80000 && state->irq_address < 0x1000) {
-      uint32 irq_address_masked = state->irq_address & 0x3FF;
-      uint32 irq_sample_offset = irq_address_masked - state->irq_decoder_clock;
+      uint32_t irq_address_masked = state->irq_address & 0x3FF;
+      uint32_t irq_sample_offset = irq_address_masked - state->irq_decoder_clock;
       if(irq_sample_offset > 0x3FF) irq_sample_offset += 0x400;
-      if (irq_sample_offset < (uint32)samples) {
+      if (irq_sample_offset < (uint32_t)samples) {
         irq_state.triggered_cycle = irq_sample_offset * 768;
       }
     } else {
@@ -1735,14 +1735,14 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
 
   for(ch = 0, chanbit = 1; ch < 24; ch++, chanbit <<= 1) {
     int r;
-    sint32 v_l, v_r;
-    uint32 main_l = chanbit & maskmain_l;
-    uint32 main_r = chanbit & maskmain_r;
-    uint32 verb_l = chanbit & maskverb_l;
-    uint32 verb_r = chanbit & maskverb_r;
-    sint32 *b = buf ? ibuf : NULL;
-    sint32 *fm = (chanbit & maskfm) ? ibuffm : NULL;
-    sint32 *noise = (chanbit & masknoise) ? ibufn : NULL;
+    int32_t v_l, v_r;
+    uint32_t main_l = chanbit & maskmain_l;
+    uint32_t main_r = chanbit & maskmain_r;
+    uint32_t verb_l = chanbit & maskverb_l;
+    uint32_t verb_r = chanbit & maskverb_r;
+    int32_t *b = buf ? ibuf : NULL;
+    int32_t *fm = (chanbit & maskfm) ? ibuffm : NULL;
+    int32_t *noise = (chanbit & masknoise) ? ibufn : NULL;
     if(!(main_l | main_r | verb_l | verb_r)) b = NULL;
     r = render_channel_mono(
       ram, state->memsize, state->chan + ch, b, fm, noise, samples, irq_state_ptr
@@ -1756,8 +1756,8 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
     v_l = volume_getlevel(state->chan[ch].vol+0);
     v_r = volume_getlevel(state->chan[ch].vol+1);
     for(i = 0; i < r; i++) {
-      sint32 q_l = (v_l * ibuf[i]) >> 16;
-      sint32 q_r = (v_r * ibuf[i]) >> 16;
+      int32_t q_l = (v_l * ibuf[i]) >> 16;
+      int32_t q_r = (v_r * ibuf[i]) >> 16;
       if(main_l) ibufmix[2*i+0] += q_l;
       if(main_r) ibufmix[2*i+1] += q_r;
       if(verb_l) ibufrvb[2*i+0] += q_l;
@@ -1773,13 +1773,13 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
   ** Mix in external input, if it exists
   */
   if(extinput) {
-    sint32 extvol_l = ((sint16)(state->avol[0]));
-    sint32 extvol_r = ((sint16)(state->avol[1]));
+    int32_t extvol_l = ((int16_t)(state->avol[0]));
+    int32_t extvol_r = ((int16_t)(state->avol[1]));
     if(extvol_l == -0x8000) extvol_l = -0x7FFF;
     if(extvol_r == -0x8000) extvol_r = -0x7FFF;
     for(i = 0; i < samples; i++) {
-      sint32 sin_l = extinput[2*i+0];
-      sint32 sin_r = extinput[2*i+1];
+      int32_t sin_l = extinput[2*i+0];
+      int32_t sin_r = extinput[2*i+1];
       sin_l *= extvol_l;
       sin_r *= extvol_r;
       sin_l >>= 15;
@@ -1804,31 +1804,31 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
   */
   m_v_l = volume_getlevel(state->mvol+0);
   m_v_r = volume_getlevel(state->mvol+1);
-  r_v_l = ((sint16)(state->evol[0]));
-  r_v_r = ((sint16)(state->evol[1]));
+  r_v_l = ((int16_t)(state->evol[0]));
+  r_v_r = ((int16_t)(state->evol[1]));
 
   if(!effectout) {
     for(i = 0; i < samples; i++) {
-      sint64 q_l = ibufmix[2*i+0];
-      sint64 q_r = ibufmix[2*i+1];
-      q_l *= (sint64)m_v_l;
-      q_r *= (sint64)m_v_r;
+      int64_t q_l = ibufmix[2*i+0];
+      int64_t q_r = ibufmix[2*i+1];
+      q_l *= (int64_t)m_v_l;
+      q_r *= (int64_t)m_v_r;
       q_l >>= 15;
       q_r >>= 15;
       CLIP_PCM_2(q_l,q_r);
-      *buf++ = (sint16)q_l;
-      *buf++ = (sint16)q_r;
+      *buf++ = (int16_t)q_l;
+      *buf++ = (int16_t)q_r;
     }
   } else {
     for(i = 0; i < samples; i++) {
-      sint64 q_l = ibufmix[2*i+0];
-      sint64 q_r = ibufmix[2*i+1];
-      sint64 r_l = ibufrvb[2*i+0];
-      sint64 r_r = ibufrvb[2*i+1];
-      q_l *= (sint64)m_v_l;
-      q_r *= (sint64)m_v_r;
-      r_l *= (sint64)r_v_l;
-      r_r *= (sint64)r_v_r;
+      int64_t q_l = ibufmix[2*i+0];
+      int64_t q_r = ibufmix[2*i+1];
+      int64_t r_l = ibufrvb[2*i+0];
+      int64_t r_r = ibufrvb[2*i+1];
+      q_l *= (int64_t)m_v_l;
+      q_r *= (int64_t)m_v_r;
+      r_l *= (int64_t)r_v_l;
+      r_r *= (int64_t)r_v_r;
       q_l >>= 15;
       q_r >>= 15;
       r_l >>= 15;
@@ -1836,8 +1836,8 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
       q_l += r_l;
       q_r += r_r;
       CLIP_PCM_2(q_l, q_r);
-      *buf++ = (sint16)q_l;
-      *buf++ = (sint16)q_r;
+      *buf++ = (int16_t)q_l;
+      *buf++ = (int16_t)q_r;
     }
   }
 }
@@ -1846,7 +1846,7 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
 /*
 ** Externally-accessible renderer
 */
-void EMU_CALL spucore_render(void *state, uint16 *ram, sint16 *buf, sint16 *extinput, uint32 samples, uint8 mainout, uint8 effectout) {
+void EMU_CALL spucore_render(void *state, uint16_t *ram, int16_t *buf, int16_t *extinput, uint32_t samples, uint8_t mainout, uint8_t effectout) {
   while(samples > RENDERMAX) {
     samples -= RENDERMAX;
     render(SPUCORESTATE, ram, buf, extinput, RENDERMAX, mainout, effectout);
@@ -1861,11 +1861,11 @@ void EMU_CALL spucore_render(void *state, uint16 *ram, sint16 *buf, sint16 *exti
 ** Flag get/set
 */
 
-int EMU_CALL spucore_getflag(void *state, uint32 n) {
+int EMU_CALL spucore_getflag(void *state, uint32_t n) {
   return !!(SPUCORESTATE->flags & n);
 }
 
-void EMU_CALL spucore_setflag(void *state, uint32 n, int value) {
+void EMU_CALL spucore_setflag(void *state, uint32_t n, int value) {
   if(value) {
     SPUCORESTATE->flags |= n;
   } else {
@@ -1878,7 +1878,7 @@ void EMU_CALL spucore_setflag(void *state, uint32 n, int value) {
 ** Register get/set
 */
 
-uint32 EMU_CALL spucore_getreg(void *state, uint32 n) {
+uint32_t EMU_CALL spucore_getreg(void *state, uint32_t n) {
   switch(n) {
   case SPUREG_MVOLL:  return volume_getmode (SPUCORESTATE->mvol+0) & 0x0000FFFF;
   case SPUREG_MVOLR:  return volume_getmode (SPUCORESTATE->mvol+1) & 0x0000FFFF;
@@ -1942,7 +1942,7 @@ uint32 EMU_CALL spucore_getreg(void *state, uint32 n) {
   return 0;
 }
 
-void EMU_CALL spucore_setreg(void *state, uint32 n, uint32 value, uint32 mask) {
+void EMU_CALL spucore_setreg(void *state, uint32_t n, uint32_t value, uint32_t mask) {
   value &= mask;
   switch(n) {
   /* TODO: the increase/decrease modes, etc. */
@@ -2064,7 +2064,7 @@ void EMU_CALL spucore_setreg(void *state, uint32 n, uint32 value, uint32 mask) {
 ** Voice register get/set
 */
 
-uint32 EMU_CALL spucore_getreg_voice(void *state, uint32 voice, uint32 n) {
+uint32_t EMU_CALL spucore_getreg_voice(void *state, uint32_t voice, uint32_t n) {
   switch(n) {
   case SPUREG_VOICE_VOLL : return volume_getmode(SPUCORESTATE->chan[voice].vol+0);
   case SPUREG_VOICE_VOLR : return volume_getmode(SPUCORESTATE->chan[voice].vol+1);
@@ -2083,7 +2083,7 @@ uint32 EMU_CALL spucore_getreg_voice(void *state, uint32 voice, uint32 n) {
   return 0;
 }
 
-void EMU_CALL spucore_setreg_voice(void *state, uint32 voice, uint32 n, uint32 value, uint32 mask) {
+void EMU_CALL spucore_setreg_voice(void *state, uint32_t voice, uint32_t n, uint32_t value, uint32_t mask) {
   value &= mask;
   switch(n) {
   /* TODO: the increase/decrease modes */
@@ -2108,8 +2108,8 @@ void EMU_CALL spucore_setreg_voice(void *state, uint32 voice, uint32 n, uint32 v
 /*
 ** IRQ checking
 */
-uint32 EMU_CALL spucore_cycles_until_interrupt(void *state, uint16 *ram, uint32 samples) {
-  uint32 r;
+uint32_t EMU_CALL spucore_cycles_until_interrupt(void *state, uint16_t *ram, uint32_t samples) {
+  uint32_t r;
   void *backup;
 
   if (!(SPUCORESTATE->flags & SPUREG_FLAG_IRQ_ENABLE)) return 0xFFFFFFFF;

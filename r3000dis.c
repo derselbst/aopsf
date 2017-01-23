@@ -12,15 +12,15 @@
 
 /////////////////////////////////////////////////////////////////////////////
 
-#define INS_S (uint32)((ins>>21)&0x1F)
-#define INS_T (uint32)((ins>>16)&0x1F)
-#define INS_D (uint32)((ins>>11)&0x1F)
-#define INS_H (uint32)((ins>>6)&0x1F)
-#define INS_I (uint32)(ins&0xFFFF)
+#define INS_S (uint32_t)((ins>>21)&0x1F)
+#define INS_T (uint32_t)((ins>>16)&0x1F)
+#define INS_D (uint32_t)((ins>>11)&0x1F)
+#define INS_H (uint32_t)((ins>>6)&0x1F)
+#define INS_I (uint32_t)(ins&0xFFFF)
 
-#define SIGNED16(x) ((sint32)(((sint16)(x))))
+#define SIGNED16(x) ((int32_t)(((int16_t)(x))))
 
-#define REL_I (pc+4+(((sint32)(SIGNED16(INS_I)))<<2))
+#define REL_I (pc+4+(((int32_t)(SIGNED16(INS_I)))<<2))
 #define ABS_I ((pc&0xF0000000)|((ins<<2)&0x0FFFFFFC))
 
 #define RICH_CODE_REGISTER ('R'-64)
@@ -31,8 +31,8 @@
 // Returns negative on unknown instuction
 // dest must have 256 bytes available
 //
-sint32 EMU_CALL r3000dis(char *dest, uint32 rich, uint32 pc, uint32 ins) {
-  sint32 delayslot = 0;
+int32_t EMU_CALL r3000dis(char *dest, uint32_t rich, uint32_t pc, uint32_t ins) {
+  int32_t delayslot = 0;
   static const char *regname[32] = {
     "$0" ,"$at","$v0","$v1","$a0","$a1","$a2","$a3",
     "$t0","$t1","$t2","$t3","$t4","$t5","$t6","$t7",

@@ -39,15 +39,15 @@
 #define strncasecmp _strnicmp
 #endif
 
-static uint32 get_le32(const uint8 *start)
+static uint32_t get_le32(const uint8_t *start)
 {
 	return start[0] | start[1]<<8 | start[2]<<16 | start[3]<<24;
 }
 
-uint32 psf_load_section(PSX_STATE *psx, const uint8 *buffer, uint32 length, uint32 first)
+uint32_t psf_load_section(PSX_STATE *psx, const uint8_t *buffer, uint32_t length, uint32_t first)
 {
-	//uint32 plength_truncat = 0;
-	uint32 offset, plength, PC, SP, GP;
+	//uint32_t plength_truncat = 0;
+	uint32_t offset, plength, PC, SP, GP;
 
 	psx->error_ptr = psx->error_buffer;
 	psx->error_buffer[0] = '\0';
@@ -101,7 +101,7 @@ uint32 psf_load_section(PSX_STATE *psx, const uint8 *buffer, uint32 length, uint
 	return 0;
 }
 
-int32 psf_start(PSX_STATE *psx)
+int32_t psf_start(PSX_STATE *psx)
 {
 	int i;
 	union cpuinfo mipsinfo;
@@ -184,7 +184,7 @@ int32 psf_start(PSX_STATE *psx)
 	return AO_SUCCESS;
 }
 
-int32 psf_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
+int32_t psf_gen(PSX_STATE *psx, int16_t *buffer, uint32_t samples)
 {
 	int i;
     
@@ -227,7 +227,7 @@ int32 psf_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
 	return AO_SUCCESS;
 }
 
-int32 psf_stop(PSX_STATE *psx)
+int32_t psf_stop(PSX_STATE *psx)
 {
 	psx->error_ptr = psx->error_buffer;
 	psx->error_buffer[0] = '\0';
@@ -238,7 +238,7 @@ int32 psf_stop(PSX_STATE *psx)
 	return AO_SUCCESS;
 }
 
-int32 psf_command(PSX_STATE *psx, int32 command, int32 parameter)
+int32_t psf_command(PSX_STATE *psx, int32_t command, int32_t parameter)
 {
 	union cpuinfo mipsinfo;
 

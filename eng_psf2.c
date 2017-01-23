@@ -59,19 +59,19 @@
 
 // main RAM
 
-static uint16 get_le16(const uint8 *start)
+static uint16_t get_le16(const uint8_t *start)
 {
 	return start[0] | start[1]<<8;
 }
 
-static uint32 get_le32(const uint8 *start)
+static uint32_t get_le32(const uint8_t *start)
 {
 	return start[0] | start[1]<<8 | start[2]<<16 | start[3]<<24;
 }
 
-static uint32 secname(const uint8 *start, uint32 strndx, uint32 shoff, uint32 shentsize, uint32 name)
+static uint32_t secname(const uint8_t *start, uint32_t strndx, uint32_t shoff, uint32_t shentsize, uint32_t name)
 {
-	uint32 offset, shent;
+	uint32_t offset, shent;
 
 	// get string table section
 	shent = shoff + (shentsize * strndx);
@@ -84,9 +84,9 @@ static uint32 secname(const uint8 *start, uint32 strndx, uint32 shoff, uint32 sh
 	return offset;
 }
 
-static void do_iopmod(const uint8 *start, uint32 offset)
+static void do_iopmod(const uint8_t *start, uint32_t offset)
 {
-	uint32 nameoffs, saddr, heap, tsize, dsize, bsize, vers2;
+	uint32_t nameoffs, saddr, heap, tsize, dsize, bsize, vers2;
 
 	nameoffs = get_le32(start + offset);
 
@@ -103,11 +103,11 @@ static void do_iopmod(const uint8 *start, uint32 offset)
 	#endif
 }
 
-uint32 psf2_load_elf(PSX_STATE *psx, const uint8 *start, uint32 len)
+uint32_t psf2_load_elf(PSX_STATE *psx, const uint8_t *start, uint32_t len)
 {
-	uint32 entry, phoff, shoff, phentsize, shentsize, phnum, shnum, shstrndx;
-	uint32 name, type, flags, addr, offset, size, shent;
-	uint32 totallen;
+	uint32_t entry, phoff, shoff, phentsize, shentsize, phnum, shnum, shstrndx;
+	uint32_t name, type, flags, addr, offset, size, shent;
+	uint32_t totallen;
 	int i, rec;
 //	FILE *f;
 
@@ -179,8 +179,8 @@ uint32 psf2_load_elf(PSX_STATE *psx, const uint8 *start, uint32 len)
 			case 9:			// REL: short relocation data
 		  		for (rec = 0; rec < (size/8); rec++)
 				{
-					uint32 offs, info, target, temp, val, vallo;
-					static uint32 hi16offs = 0, hi16target = 0;
+					uint32_t offs, info, target, temp, val, vallo;
+					static uint32_t hi16offs = 0, hi16target = 0;
 
 					offs = get_le32(start + offset + (rec*8));
 					info = get_le32(start + offset + 4 + (rec*8));
@@ -261,16 +261,16 @@ uint32 psf2_load_elf(PSX_STATE *psx, const uint8 *start, uint32 len)
 }
 
 #if 0
-static dump_files(int fs, uint8 *buf, uint32 buflen)
+static dump_files(int fs, uint8_t *buf, uint32_t buflen)
 {
-	int32 numfiles, i, j;
-	uint8 *cptr;
-	uint32 offs, uncomp, bsize, cofs, uofs;
-	uint32 X;
+	int32_t numfiles, i, j;
+	uint8_t *cptr;
+	uint32_t offs, uncomp, bsize, cofs, uofs;
+	uint32_t X;
 	uLongf dlength;
 	int uerr;
-	uint8 *start;
-	uint32 len;
+	uint8_t *start;
+	uint32_t len;
 	FILE *f;
 	char tfn[128];
 
@@ -299,7 +299,7 @@ static dump_files(int fs, uint8 *buf, uint32 buflen)
 			uofs = 0;
 			for (j = 0; j < X; j++)
 			{
-				uint32 usize;
+				uint32_t usize;
 
 				usize = start[offs+(j*4)] | start[offs+1+(j*4)]<<8 | start[offs+2+(j*4)]<<16 | start[offs+3+(j*4)]<<24;
 
@@ -334,7 +334,7 @@ static dump_files(int fs, uint8 *buf, uint32 buflen)
 #endif
 
 // find a file on our filesystems
-uint32 psf2_load_file(PSX_STATE *psx, const char *file, uint8 *buf, uint32 buflen)
+uint32_t psf2_load_file(PSX_STATE *psx, const char *file, uint8_t *buf, uint32_t buflen)
 {
     int i = psx->readfile(psx->readfile_context, file, 0, (char *) buf, buflen);
     if (i < 0)
@@ -343,10 +343,10 @@ uint32 psf2_load_file(PSX_STATE *psx, const char *file, uint8 *buf, uint32 bufle
         return i;
 }
 
-int32 psf2_start(PSX_STATE *psx)
+int32_t psf2_start(PSX_STATE *psx)
 {
-	uint32 irx_len;
-	uint8 *buf;
+	uint32_t irx_len;
+	uint8_t *buf;
 	union cpuinfo mipsinfo;
     
 	psx->error_ptr = psx->error_buffer;
@@ -363,7 +363,7 @@ int32 psf2_start(PSX_STATE *psx)
 	memset(psx->psx_ram, 0, 2*1024*1024);
 
 	// load psf2.irx, which kicks everything off
-	buf = (uint8 *)malloc(512*1024);
+	buf = (uint8_t *)malloc(512*1024);
 	irx_len = psf2_load_file(psx, "psf2.irx", buf, 512*1024);
 
 	if (irx_len != 0xffffffff)
@@ -401,7 +401,7 @@ int32 psf2_start(PSX_STATE *psx)
 	mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R5, &mipsinfo);
 	psx->psx_ram[1] = LE32(0x80000008);
 
-	buf = (uint8 *)&psx->psx_ram[2];
+	buf = (uint8_t *)&psx->psx_ram[2];
 	strcpy((char *)buf, "aofile:/");
 
 	psx->psx_ram[0] = LE32(FUNCT_HLECALL);
@@ -415,7 +415,7 @@ int32 psf2_start(PSX_STATE *psx)
 	return AO_SUCCESS;
 }
 
-int32 psf2_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
+int32_t psf2_gen(PSX_STATE *psx, int16_t *buffer, uint32_t samples)
 {
 	int i;
 
@@ -463,7 +463,7 @@ int32 psf2_gen(PSX_STATE *psx, int16 *buffer, uint32 samples)
 	return AO_SUCCESS;
 }
 
-int32 psf2_stop(PSX_STATE *psx)
+int32_t psf2_stop(PSX_STATE *psx)
 {
 	int i;
 
@@ -487,7 +487,7 @@ int32 psf2_stop(PSX_STATE *psx)
 	return AO_SUCCESS;
 }
 
-int32 psf2_command(PSX_STATE *psx, int32 command, int32 parameter)
+int32_t psf2_command(PSX_STATE *psx, int32_t command, int32_t parameter)
 {
 	union cpuinfo mipsinfo;
 
@@ -531,12 +531,12 @@ int32 psf2_command(PSX_STATE *psx, int32 command, int32 parameter)
 	return AO_FAIL;
 }
 
-uint32 psf2_get_loadaddr(PSX_STATE *psx)
+uint32_t psf2_get_loadaddr(PSX_STATE *psx)
 {
 	return psx->loadAddr;
 }
 
-void psf2_set_loadaddr(PSX_STATE *psx, uint32 new)
+void psf2_set_loadaddr(PSX_STATE *psx, uint32_t new)
 {
 	psx->loadAddr = new;
 }
