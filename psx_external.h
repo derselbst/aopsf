@@ -36,8 +36,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-    
-#include "ao.h"
 
 typedef struct psx_state PSX_STATE;
 
