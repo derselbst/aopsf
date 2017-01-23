@@ -275,6 +275,8 @@ void psx_irq_set(PSX_STATE *psx, uint32 irq)
 	psx_irq_update(psx);
 }
 
+uint32 ioptimer_lw(struct IOPTIMER_STATE *state, offs_t offset, uint32 mem_mask);
+
 uint32 psx_hw_read(PSX_STATE *psx, offs_t offset, uint32 mem_mask)
 {
 	if (offset >= 0x00000000 && offset <= 0x007fffff)
