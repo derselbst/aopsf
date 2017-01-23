@@ -9,7 +9,7 @@ libaopsf.a : $(OBJS)
 	$(AR) rcs $@ $^
 
 libaopsf.so: $(OBJS)
-	$(CC) $^ -shared -Wl,-soname -Wl,$@.2 -o $@.2.0
+	$(CC) $^ -shared -Wl,-soname -Wl,$@.0 -o $@.0
 
 .c.o:
 	$(CC) $(CFLAGS) -o $@ $*.c
