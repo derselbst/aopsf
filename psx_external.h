@@ -39,6 +39,19 @@ extern "C" {
 
 typedef struct psx_state PSX_STATE;
 
+enum
+{
+	COMMAND_NONE = 0,
+	COMMAND_PREV,
+	COMMAND_NEXT,
+	COMMAND_RESTART,
+	COMMAND_HAS_PREV,
+	COMMAND_HAS_NEXT,
+	COMMAND_GET_MIN,
+	COMMAND_GET_MAX,
+	COMMAND_JUMP
+};
+
 extern uint32_t psx_get_state_size(uint32_t version);
 
 extern void   psx_set_refresh(PSX_STATE *psx, uint32_t refresh);
