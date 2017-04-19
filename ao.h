@@ -7,10 +7,6 @@
 #ifndef __AO_H
 #define __AO_H
 
-#define AO_SUCCESS					1
-#define AO_FAIL						0
-#define AO_FAIL_DECOMPRESSION		-1
-
 #define MAX_DISP_INFO_LENGTH		256
 #define AUDIO_RATE					(44100)
 

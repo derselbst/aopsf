@@ -37,6 +37,10 @@
 extern "C" {
 #endif
 
+#define AO_SUCCESS 1
+#define AO_FAIL 0
+#define AO_FAIL_DECOMPRESSION -1
+
 typedef struct psx_state PSX_STATE;
 
 enum
