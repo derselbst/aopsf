@@ -33,6 +33,8 @@
 #ifndef _PSX_EXTERNAL_H_
 #define _PSX_EXTERNAL_H_
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -1,7 +1,6 @@
 #ifndef _MIPS_H
 #define _MIPS_H
 
-#include <stdint.h>
 //#include "driver.h"
 #include "psx_external.h"
 
