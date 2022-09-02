@@ -3458,6 +3458,19 @@ void psx_iop_call(PSX_STATE *psx, uint32_t pc, uint32_t callnum)
 				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
 				break;
 
+			case 38:	// strtoul
+				mname = (char *)&psx->psx_ram[(a0 & 0x1fffff) / 4];
+				mname += (a0 & 3);
+
+				if (a1)
+				{
+					psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled strtoul with non-NULL second parm\n");
+				}
+
+				mipsinfo.i = strtoul(mname, NULL, a2);
+				mips_set_info(&psx->mipscpu, CPUINFO_INT_REGISTER + MIPS_R2, &mipsinfo);
+				break;
+
 			default:
 				psx->error_ptr += sprintf(psx->error_ptr, "IOP: Unhandled service %d for module %s\n", callnum, name);
 				break;
@@ -3975,6 +3988,8 @@ void psx_iop_call(PSX_STATE *psx, uint32_t pc, uint32_t callnum)
 	{
 		switch (callnum)
 		{
+			// XXX
+			case 4:    // WaitVblankStart
 			case 5:    // WaitVblankEnd
 				if (psx->iCurThread >= 0)
 				{
