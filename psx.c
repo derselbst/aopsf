@@ -214,7 +214,7 @@ void GTELOG(const char *a,...)
 	logerror( mipscpu, "%08x: GTE: %08x %s\n", mipscpu->pc, INS_COFUN( mipscpu->op ), s_text );
 }
 #else
-INLINE static void GTELOG(const char *a, ...) {}
+INLINE void GTELOG(const char *a, ...) {}
 #endif
 
 static uint32_t getcp2dr( MIPS_CPU_CONTEXT *mipscpu, int n_reg );
@@ -222,7 +222,7 @@ static void setcp2dr( MIPS_CPU_CONTEXT *mipscpu, int n_reg, uint32_t n_value );
 static uint32_t getcp2cr( MIPS_CPU_CONTEXT *mipscpu, int n_reg );
 static void setcp2cr( MIPS_CPU_CONTEXT *mipscpu, int n_reg, uint32_t n_value );
 static void docop2( MIPS_CPU_CONTEXT *mipscpu, int gteop );
-static void mips_exception( MIPS_CPU_CONTEXT *mipscpu, int exception );
+void mips_exception( MIPS_CPU_CONTEXT *mipscpu, int exception );
 
 void mips_stop( MIPS_CPU_CONTEXT *mipscpu )
 {
@@ -234,7 +234,7 @@ void mips_stop( MIPS_CPU_CONTEXT *mipscpu )
 #endif
 }
 
-INLINE static void mips_set_cp0r( MIPS_CPU_CONTEXT *mipscpu, int reg, uint32_t value )
+INLINE void mips_set_cp0r( MIPS_CPU_CONTEXT *mipscpu, int reg, uint32_t value )
 {
 	mipscpu->cp0r[ reg ] = value;
 	if( reg == CP0_SR || reg == CP0_CAUSE )
@@ -326,7 +326,7 @@ INLINE void mips_delayed_load( MIPS_CPU_CONTEXT *mipscpu, uint32_t n_r, uint32_t
 	}
 }
 
-static void mips_exception( MIPS_CPU_CONTEXT *mipscpu, int exception )
+void mips_exception( MIPS_CPU_CONTEXT *mipscpu, int exception )
 {
 	mips_set_cp0r( mipscpu, CP0_SR, ( mipscpu->cp0r[ CP0_SR ] & ~0x3f ) | ( ( mipscpu->cp0r[ CP0_SR ] << 2 ) & 0x3f ) );
 	if( mipscpu->delayr == REGPC )
