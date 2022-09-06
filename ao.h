@@ -82,7 +82,7 @@ typedef struct
 #if defined(_MSC_VER)
 #define INLINE __forceinline
 #elif defined(__GNUC__)
-#define INLINE inline __attribute__((always_inline))
+#define INLINE inline
 #elif defined(_MWERKS_)
 #define INLINE inline
 #elif defined(__powerc)
