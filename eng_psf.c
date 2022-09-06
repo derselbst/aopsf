@@ -222,8 +222,9 @@ int32_t psf_gen(PSX_STATE *psx, int16_t *buffer, uint32_t samples)
     psx->samples_into_frame = samples_into_frame;
     
     if (psx->stop)
+    {
         return AO_FAIL;
-
+    }
 	return AO_SUCCESS;
 }
 

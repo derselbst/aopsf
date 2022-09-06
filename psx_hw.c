@@ -490,8 +490,9 @@ static void ps2_dma7(PSX_STATE *psx, uint32_t madr, uint32_t bcr, uint32_t chcr)
 
     delay /= 768;
     if (!delay)
+    {
         delay = 1;
-    
+    }
 	psx->dma7_delay = delay;
 }
 
