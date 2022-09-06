@@ -355,7 +355,6 @@ extern uint32_t mips_get_ePC(MIPS_CPU_CONTEXT *);
 
 uint32_t psf2_get_loadaddr(PSX_STATE *);
 void psf2_set_loadaddr(PSX_STATE *, uint32_t new);
-static void call_irq_routine(PSX_STATE *, uint32_t routine, uint32_t parameter);
 
 extern void psx_bios_hle(PSX_STATE *, uint32_t pc);
 extern void psx_iop_call(PSX_STATE *, uint32_t pc, uint32_t callnum);

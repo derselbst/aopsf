@@ -268,6 +268,8 @@ static void psx_irq_update(PSX_STATE *psx)
 	}
 }
 
+static void call_irq_routine(PSX_STATE *, uint32_t routine, uint32_t parameter);
+
 void psx_irq_set(PSX_STATE *psx, uint32_t irq)
 {
 	psx->irq_data |= irq;
